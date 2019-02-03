@@ -1,0 +1,36 @@
+{
+  "name": "webrtc-stats",
+  "version": "0.0.1",
+  "description": "Library that helps you read webrtc stats.",
+  "main": "index.js",
+  "module": "module.mjs",
+  "browser": "dist/browser.js",
+  "repository": "",
+  "author": "Andrei Onel",
+  "license": "MIT",
+  "scripts": {
+    "prebuild": "npm run clean",
+    "build": "rollup -c",
+    "start": "rollup -c -w",
+    "clean": "del dist",
+    "prepublishOnly": "npm run build",
+    "pretest": "npm run build",
+    "test": "echo 'Soon'"
+  },
+  "engines": {
+    "node": ">=8"
+  },
+  "keywords": [],
+  "devDependencies": {
+    "del-cli": "^1.1.0",
+    "esm": "^3.0.46",
+    "rollup": "^1.1.2",
+    "rollup-plugin-node-builtins": "^2.1.2",
+    "standard": "^11.0.0"
+  },
+  "standard": {
+    "ignore": [
+      "**/dist/"
+    ]
+  }
+}
