@@ -1,5 +1,4 @@
 # WebRTC Stats
----
 
 WebRTC Stats helps you with everything related to getting and parsing the stats for your app's WebRTC PeerConnections.
 On top of handling getting the stats for each peer in the call it also offers a parsed object that better helps you understand what's happening with the connection.
@@ -9,17 +8,15 @@ WebRTC Stats is using `EventEmitter` to fire events that you can listen to in yo
 The library is heavily inspired by [@fippo](https://github.com/fippo)'s work on a similar library.
 
 ## Install
----
 ```sh
 npm install @peermetrics/webrtc-stats
 ```
 
 ## Usage
----
 ### Loding the module
 WebRTC Stats can be loaded as an ES6 module, node module or directly in the browser.
 
-After loading the module, initialize the module. 
+After loading the module, initialize it. 
 *See [Options](#options) for all the initalize options*
 ```js
 let stats = new WebRTCStats({
@@ -49,7 +46,7 @@ Now every `5000` ms  WebRTC Stats will fire the `stats` event that will come wit
     data: {...}, # an object created after parsing the stats
     rawStats: RTCStatsReport, # the actual RTCStatsReport results from `getStats()`
     statsObject: {}, # an object created from RTCStatsReport that uses the `id` for each report as a key
-    filteredStats: {}, # same as statsObject but with some repot types filtered out (eg: `codec`, `certificate`)
+    filteredStats: {}, # same as statsObject but with some report types filtered out (eg: `codec`, `certificate`)
 }
 ```
 
@@ -57,7 +54,7 @@ Now every `5000` ms  WebRTC Stats will fire the `stats` event that will come wit
 The module accepts the following options when initialized:
 ```js
 let stats = new WebRTCStats({
-    # the interval in of how often we should get stats
+    # the interval in ms of how often we should get stats
     getStatsInterval: 5000, # Default: 1000
 
     # if we should include the original RTCStatsReport map when firing the `stats` event
@@ -69,7 +66,8 @@ let stats = new WebRTCStats({
     # if we should filter out some stats
     filteredStats: false, # Default: false
     
-    # If we should wrap methods from the `PeerConnection` class to capture events in the imeline. Wraps methods like: `addTrack`, `removeTrack`,  'createOffer', 'createAnswer', etc
+    # If we should wrap methods from the `PeerConnection` class to capture events in the timeline. 
+    # Wraps methods like: `addTrack`, `removeTrack`,  'createOffer', 'createAnswer', etc
     wrapRTCPeerConnection: false, # Default: false
 
     # If we should wrap the `geUserMedia` calls so we can gather events when the methods is called or success/error
@@ -136,5 +134,4 @@ Some events are not fired if for example `wrapLegacyGetUserMedia` and `wrapRTCPe
 - `ice`
 
 ## License
----
 MIT
