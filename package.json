@@ -1,6 +1,6 @@
 {
   "name": "@peermetrics/webrtc-stats",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Library that helps you read webrtc stats.",
   "main": "dist/index.js",
   "browser": "dist/browser.js",
