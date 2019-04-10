@@ -2,16 +2,26 @@ import builtins from 'rollup-plugin-node-builtins'
 
 import pkg from './package.json'
 
-export default {
-  input: 'module.mjs',
+const plugins = [
+  builtins()
+]
+
+export default [{
+  input: 'src/browser.mjs',
   output: [
     {
       file: pkg.browser,
-      format: 'iife',
-      name: 'rtcStats'
+      format: 'iife'
     }
   ],
-  plugins: [
-    builtins()
-  ]
-}
+  plugins: plugins
+}, {
+  input: 'src/module.mjs',
+  output: [
+    {
+      file: pkg.main,
+      format: 'cjs'
+    }
+  ],
+  plugins: plugins
+}]

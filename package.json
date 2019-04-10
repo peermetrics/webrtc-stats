@@ -1,18 +1,19 @@
 {
-  "name": "webrtc-stats",
-  "version": "0.0.1",
+  "name": "@peermetrics/webrtc-stats",
+  "version": "0.0.0",
   "description": "Library that helps you read webrtc stats.",
-  "main": "index.js",
-  "module": "module.mjs",
+  "main": "dist/index.js",
   "browser": "dist/browser.js",
-  "repository": "",
-  "author": "Andrei Onel",
+  "module": "src/module.mjs",
+  "repository": "https://github.com/peermetrics/webrtc-stats",
+  "author": "Andrei Onel <andrei@peermetrics.io>",
   "license": "MIT",
   "scripts": {
-    "prebuild": "npm run clean",
-    "build": "rollup -c",
+    "build": "rollup -c && npm run copy",
+    "serve": "npm run build && http-server dist",
     "start": "rollup -c -w",
     "clean": "del dist",
+    "copy": "cpy './src/index.html' './dist'",
     "prepublishOnly": "npm run build",
     "pretest": "npm run build",
     "test": "echo 'Soon'"
@@ -21,16 +22,22 @@
     "node": ">=8"
   },
   "keywords": [],
+  "dependencies": {},
   "devDependencies": {
+    "cpy-cli": "^2.0.0",
     "del-cli": "^1.1.0",
-    "esm": "^3.0.46",
+    "http-server": "^0.11.1",
     "rollup": "^1.1.2",
     "rollup-plugin-node-builtins": "^2.1.2",
     "standard": "^11.0.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "standard": {
     "ignore": [
-      "**/dist/"
+      "**/dist/",
+      "**.html"
     ]
   }
 }

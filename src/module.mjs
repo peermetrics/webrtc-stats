@@ -1,45 +1,59 @@
 
-import { enumerateStats, map2obj } from './utils.mjs'
+import { parseStats, map2obj } from './utils.mjs'
 import EventEmitter from 'events'
 
 const legacyMethodsPrefixes = ['', 'moz', 'webkit']
-
-let trace = console.log
+let debug = console.log.bind(console.log)
 
 export class WebRTCStats extends EventEmitter {
   constructor (options = {}) {
     super()
 
-    // check if browser
-    // check if webrtc compatible
-
-    // only work in the browser
+    // only works in the browser
     if (typeof window === 'undefined') {
       return null
     }
 
-    this.localStream = null
-
     // internal settings
-    this.prefixesToWrap = legacyMethodsPrefixes
     this.wrtc = {
       RTCPeerConnection: window.RTCPeerConnection
     }
 
-    // TODO: remove this
+    // TODO: implement edge support
     this.isEdge = !!window.RTCIceGatherer
 
     this.getStatsInterval = options.getStatsInterval || 1000
-    this.statsMonitoring = options.statsMonitoring || false
-    this.monitoringInterval = null
-    this.compressStats = false
+    if (!this.getStatsInterval || !Number.isInteger(this.getStatsInterval)) {
+      throw new Error(`getStatsInterval should be an integer, got: ${options.getStatsInterval}`)
+    }
+    this.statsMonitoring = true
 
-    this.parsedStats = options.parsedStats || false
-    this.filteredStats = options.parsedStats || false
+    /**
+     * Reference to the setInterval function
+     * @type {Function}
+     */
+    this.monitoringSetInterval = null
+
+    this.wrapRTCPeerConnection = options.wrapRTCPeerConnection || false
+
     this.rawStats = options.rawStats || false
-    this.wrapLegacyMethods = options.wrapLegacyMethods || false
+    this.statsObject = options.statsObject || false
+    this.filteredStats = options.filteredStats || false
+    // option not used yet
+    this.compressStats = options.compressStats || false
+
+    // getUserMedia options
+    this.wrapGetUserMedia = options.wrapGetUserMedia || false
+    this.wrapLegacyGetUserMedia = options.wrapLegacyGetUserMedia || false
+    this.prefixesToWrap = options.prefixesToWrap || legacyMethodsPrefixes
 
     this._peersToMonitor = {}
+
+    /**
+     * If we want to enable debug
+     * @return {Function}
+     */
+    this.debug = options.debug ? debug : function () {}
 
     /**
      * Used to keep track of all the events
@@ -69,31 +83,42 @@ export class WebRTCStats extends EventEmitter {
     ]
 
     // add event listeners for getUserMedia
-    this.wrapGetUserMedia({
-      wrapLegacyMethods: this.wrapLegacyMethods
-    })
+    if (this.wrapGetUserMedia) {
+      this.wrapGetUserMedia()
+    }
 
-    this.wrapRTCPeerConnection()
+    // wrap RTCPeerConnection methods so we can fire timeline events
+    if (this.wrapRTCPeerConnection) {
+      this.wrapRTCPeerConnection()
+    }
   }
 
-  get timeline () {
+  /**
+   * Returns the timeline of events
+   * If a tag is it will filter out events based on it
+   * @param  {String} tag The tag to filter events (optional)
+   * @return {Array}     The timeline array (or sub array if tag is defined)
+   */
+  getTimeline (tag) {
+    if (tag) {
+      return this._timeline.filter((event) => event.tag === tag)
+    }
+
     return this._timeline
   }
 
   wrapGetUserMedia (options = {}) {
-    // var self = this
-
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return
 
     let origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
 
     let getUserMediaCallback = this.parseGetUserMedia.bind(this)
     let gum = function () {
-      getUserMediaCallback({arguments: arguments[0]})
+      // the first call will be with the constraints
+      getUserMediaCallback({constraints: arguments[0]})
 
       return origGetUserMedia.apply(navigator.mediaDevices, arguments)
         .then((stream) => {
-          // self.localStream = stream
           getUserMediaCallback({stream: stream})
           return stream
         }, (err) => {
@@ -105,7 +130,7 @@ export class WebRTCStats extends EventEmitter {
     // replace the native method
     navigator.mediaDevices.getUserMedia = gum.bind(navigator.mediaDevices)
 
-    if (options.wrapLegacyMethods) {
+    if (this.wrapLegacyGetUserMedia) {
       this._wrapLegacyGetUserMedia()
     }
   }
@@ -156,16 +181,17 @@ export class WebRTCStats extends EventEmitter {
 
   // TODO
   wrapGetDisplayMedia () {
+    let self = this
     if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
       let origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices)
       let gdm = function () {
-        trace('navigator.mediaDevices.getDisplayMedia', null, arguments[0])
+        self.debug('navigator.mediaDevices.getDisplayMedia', null, arguments[0])
         return origGetDisplayMedia.apply(navigator.mediaDevices, arguments)
           .then(function (stream) {
-            trace('navigator.mediaDevices.getDisplayMediaOnSuccess', null, dumpStream(stream))
+            // self.debug('navigator.mediaDevices.getDisplayMediaOnSuccess', null, dumpStream(stream))
             return stream
           }, function (err) {
-            trace('navigator.mediaDevices.getDisplayMediaOnFailure', null, err.name)
+            self.debug('navigator.mediaDevices.getDisplayMediaOnFailure', null, err.name)
             return Promise.reject(err)
           })
       }
@@ -173,12 +199,15 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
+  /**
+   * Wraps RTC peer connections methods so we can fire timeline events
+   */
   wrapRTCPeerConnection () {
-    var self = this
+    let self = this
     let nativeRTCPeerConnection = this.wrtc.RTCPeerConnection;
 
     ['createDataChannel', 'close'].forEach(function (method) {
-      var nativeMethod = nativeRTCPeerConnection.prototype[method]
+      let nativeMethod = nativeRTCPeerConnection.prototype[method]
       if (nativeMethod) {
         nativeRTCPeerConnection.prototype[method] = function () {
           self.addToTimeline({
@@ -192,33 +221,36 @@ export class WebRTCStats extends EventEmitter {
       }
     });
 
-    ['addStream', 'removeStream'].forEach(function (method) {
-      var nativeMethod = nativeRTCPeerConnection.prototype[method]
-      if (nativeMethod) {
-        nativeRTCPeerConnection.prototype[method] = function () {
-          self.addToTimeline({
-            event: method,
-            tag: 'stream',
-            peerId: this.__rtcStatsId,
-            stream: arguments[0]
-          })
-          return nativeMethod.apply(this, arguments)
-        }
-      }
-    });
+    // DEPRECATED
+    // ['addStream', 'removeStream'].forEach(function (method) {
+    //   var nativeMethod = nativeRTCPeerConnection.prototype[method]
+    //   if (nativeMethod) {
+    //     nativeRTCPeerConnection.prototype[method] = function () {
+    //       self.addToTimeline({
+    //         event: method,
+    //         tag: 'stream',
+    //         peerId: this.__rtcStatsId,
+    //         stream: arguments[0]
+    //       })
+    //       return nativeMethod.apply(this, arguments)
+    //     }
+    //   }
+    // });
 
     ['addTrack'].forEach(function (method) {
       var nativeMethod = nativeRTCPeerConnection.prototype[method]
       if (nativeMethod) {
         nativeRTCPeerConnection.prototype[method] = function () {
           var track = arguments[0]
-          var streams = [].slice.call(arguments, 1)
-          self.addToTimeline({
+          var stream = arguments[1] // [].slice.call(arguments, 1)
+          self.addCustomEvent('track', {
             event: method,
             tag: 'track',
             peerId: this.__rtcStatsId,
-            track: track,
-            streams: streams
+            data: {
+              stream: self.getStreamDetails(stream),
+              track: self.getMediaTrackDetails(track)
+            }
           })
           return nativeMethod.apply(this, arguments)
         }
@@ -234,7 +266,7 @@ export class WebRTCStats extends EventEmitter {
             event: method,
             tag: 'track',
             peerId: this.__rtcStatsId,
-            track: track
+            track: self.getMediaTrackDetails(track)
           })
           return nativeMethod.apply(this, arguments)
         }
@@ -339,19 +371,6 @@ export class WebRTCStats extends EventEmitter {
   /**
    * Start tracking connection with a peer
    * @param {Object} options The options object
-   *
-   *
-   * Events:
-   * peerAdded
-   * startNegociation
-   * startSDPNegociation
-   * finishedSDPNegociation
-   * startIceNegociation
-   * finishedIceNegociation
-   * finishedNegociation
-   * peerConnected
-   * streamAdded
-   *
    */
   addPeer (options) {
     // get the peer connection
@@ -366,7 +385,13 @@ export class WebRTCStats extends EventEmitter {
     }
 
     if (this.isEdge) {
-      throw new Error('Can\'t monitor this peer')
+      console.error(new Error('Can\'t monitor peers in Edge at this time.'))
+      return
+    }
+
+    if (this._peersToMonitor[options.peerId]) {
+      console.warn(`We are already monitoring peer with id ${options.peerId}.`)
+      return
     }
 
     let id = options.peerId
@@ -390,18 +415,16 @@ export class WebRTCStats extends EventEmitter {
       }
     })
 
-    // TODO: do we want to log constraints here? They are chrome-proprietary.
-    // http://stackoverflow.com/questions/31003928/what-do-each-of-these-experimental-goog-rtcpeerconnectionconstraints-do
-    // if (constraints) {
-    //   trace('constraints', id, constraints);
+    // let startMonitoring = typeof options.statsMonitoring !== 'undefined' ? options.statsMonitoring : this.statsMonitoring
+    // if (startMonitoring) {
+    this.monitorPeer(pc)
     // }
-
-    let startMonitoring = typeof options.statsMonitoring !== 'undefined' ? options.statsMonitoring : this.statsMonitoring
-    if (startMonitoring) {
-      this.monitorPeer(pc)
-    }
   }
 
+  /**
+   * Used to add to the list of peers to get stats for
+   * @param  {RTCPeerConnection} pc
+   */
   monitorPeer (pc) {
     if (!pc) return
 
@@ -428,19 +451,19 @@ export class WebRTCStats extends EventEmitter {
    * Used to start the setTimeout and request getStats from the peers
    *
    * configs used
-   * monitoringInterval
+   * monitoringSetInterval
    * getStatsInterval
    * promBased
    * _peersToMonitor
    * compressStats
    */
   startMonitoring () {
-    if (this.monitoringInterval) return
+    if (this.monitoringSetInterval) return
 
-    this.monitoringInterval = window.setInterval(() => {
+    this.monitoringSetInterval = window.setInterval(() => {
       // if we ran out of peers to monitor
       if (!Object.keys(this._peersToMonitor)) {
-        window.clearInterval(this.monitoringInterval)
+        window.clearInterval(this.monitoringSetInterval)
       }
 
       for (let key in this._peersToMonitor) {
@@ -448,8 +471,6 @@ export class WebRTCStats extends EventEmitter {
         let pc = peerObject.pc
 
         let id = pc.__rtcStatsId
-
-        let trackIds = this.getTrackIds(pc)
 
         // stop monitoring closed peer connections
         if (!pc || pc.signalingState === 'closed') {
@@ -461,63 +482,58 @@ export class WebRTCStats extends EventEmitter {
           let prom = pc.getStats(null)
           if (prom) {
             prom.then((res) => {
-              let parsedStats = map2obj(res)
+              // create an object from the RTCStats map
+              let statsObject = map2obj(res)
 
-              let enumerated = enumerateStats(parsedStats, trackIds, peerObject.stats.parsed)
+              let parsedStats = parseStats(res, peerObject.stats.parsed)
 
-              let timelineObject = {
+              let statsEventObject = {
                 event: 'stats',
                 tag: 'stats',
                 peerId: id,
-                data: enumerated
+                data: parsedStats
               }
 
               if (this.rawStats === true) {
-                timelineObject['rawStats'] = res
+                statsEventObject['rawStats'] = res
               }
-              if (this.parsedStats === true) {
-                timelineObject['parsedStats'] = parsedStats
+              if (this.statsObject === true) {
+                statsEventObject['statsObject'] = statsObject
               }
               if (this.filteredStats === true) {
-                timelineObject['filteredStats'] = this.filteroutStats(parsedStats)
+                statsEventObject['filteredStats'] = this.filteroutStats(statsObject)
               }
 
-              // add it to the timeline
-              this.addToTimeline(timelineObject)
+              // add it to the timeline and also emit the stats event
+              this.addCustomEvent('stats', statsEventObject)
 
-              // and also emit the stats event
-              this.emit('stats', timelineObject)
-
-              peerObject.stats.parsed = enumerated
+              peerObject.stats.parsed = parsedStats
               // peerObject.stats.raw = res
             }).catch((err) => {
               console.error('error reading stats', err)
             })
-          } else {
-            // if it didn't return a promise but also didn't throw.
-            // TODO: ??
           }
         } catch (e) {
-          console.error(e)
+          this.debug(e)
 
           // TODO: finish implementing this
-          pc.getStats((res) => {
-            let stats = this.analyseLegacyPeerStats(pc, res)
-            trace('getstats', id, stats)
-          }, (err) => {
-            console.error('error reading legacy stats', err)
-          })
+          // pc.getStats((res) => {
+          //   let stats = this.analyseLegacyPeerStats(pc, res)
+          //   trace('getstats', id, stats)
+          // }, (err) => {
+          //   console.error('error reading legacy stats', err)
+          // })
         }
       }
     }, this.getStatsInterval)
   }
 
   /**
-   * Used to get the ids for local and remote streams
+   * Used to get the tracks for local and remote tracks
    * @param  {RTCPeerConnection} pc
    * @return {Object}
    */
-  getTrackIds (pc) {
+  getPeerConnectionTracks (pc) {
     let result = {
       localTrackIds: {
         audio: null,
@@ -531,40 +547,27 @@ export class WebRTCStats extends EventEmitter {
 
     let local = pc.getSenders()
     for (let rtpSender of local) {
-      if (rtpSender.track.kind === 'audio') {
-        result.localTrackIds.audio = rtpSender.track.id
-      } else if (rtpSender.track.kind === 'video') {
-        result.localTrackIds.video = rtpSender.track.id
+      if (rtpSender.track) {
+        if (rtpSender.track.kind === 'audio') {
+          result.localTrackIds.audio = rtpSender.track
+        } else if (rtpSender.track.kind === 'video') {
+          result.localTrackIds.video = rtpSender.track
+        }
       }
     }
 
     let remote = pc.getReceivers()
     for (let rtpSender of remote) {
-      if (rtpSender.track.kind === 'audio') {
-        result.remoteTrackIds.audio = rtpSender.track.id
-      } else if (rtpSender.track.kind === 'video') {
-        result.remoteTrackIds.video = rtpSender.track.id
+      if (rtpSender.track) {
+        if (rtpSender.track.kind === 'audio') {
+          result.remoteTrackIds.audio = rtpSender.track
+        } else if (rtpSender.track.kind === 'video') {
+          result.remoteTrackIds.video = rtpSender.track
+        }
       }
     }
 
     return result
-  }
-
-  parsePeerStats (res, prev) {
-    if (!(res instanceof RTCStatsReport)) {
-      throw new Error('Invalid Stats Type. Not RTCStatsReport')
-    }
-
-    let now = map2obj(res)
-    // our new prev
-    let base = {...now}
-
-    if (this.compressStats) {
-      let compressed = this._deltaCompression(prev, now)
-      return compressed
-    } else {
-      return base
-    }
   }
 
   /**
@@ -585,6 +588,11 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
+  /**
+   * Filter out some stats, mainly codec and certificate
+   * @param  {Object} stats The parsed rtc stats object
+   * @return {Object}       The new object with some keys deleted
+   */
   filteroutStats (stats = {}) {
     let fullObject = {...stats}
     for (let key in fullObject) {
@@ -671,29 +679,35 @@ export class WebRTCStats extends EventEmitter {
     })
 
     // deprecated
-    // pc.addEventListener('addstream', function(e) {
-    //   trace('onaddstream', id, e.stream.id + ' ' + e.stream.getTracks().map(function(t) { return t.kind + ':' + t.id; }));
-    // });
+    // pc.addEventListener('addstream', function(e) {});
 
     // deprecated
-    // pc.addEventListener('removestream', function(e) {
-    //   trace('onremovestream', id, e.stream.id + ' ' + e.stream.getTracks().map(function(t) { return t.kind + ':' + t.id; }));
-    // });
+    // pc.addEventListener('removestream', function(e) {});
 
     pc.addEventListener('track', (e) => {
+      let track = e.track
+      let stream = e.streams[0]
+
       // save the remote stream
-      this._peersToMonitor[id].stream = e.streams[0]
-      this.addToTimeline({
+      this._peersToMonitor[id].stream = stream
+
+      this._addTrackEventListeners(track)
+      this.addCustomEvent('track', {
         event: 'ontrack',
         tag: 'track',
         peerId: id,
-        data: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) { return 'stream:' + stream.id })
+        data: {
+          stream: this.getStreamDetails(stream),
+          track: this.getMediaTrackDetails(track),
+          title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) { return 'stream:' + stream.id })
+        }
       })
     })
 
     pc.addEventListener('signalingstatechange', () => {
       this.addToTimeline({
         event: 'onsignalingstatechange',
+        tag: 'ice',
         peerId: id,
         data: pc.signalingState
       })
@@ -737,12 +751,111 @@ export class WebRTCStats extends EventEmitter {
     })
   }
 
+  /**
+   * Called when we get the stream from getUserMedia. We parse the stream and fire events
+   * @param  {Object} options
+   */
+  parseGetUserMedia (options) {
+    let obj = {
+      event: 'getUserMedia',
+      tag: 'getUserMedia',
+      data: options
+    }
+
+    // if we received the stream, get the details for the tracks
+    if (options.stream) {
+      obj.data.details = this._parseStream(options.stream)
+    }
+
+    this.addCustomEvent('getUserMedia', obj)
+  }
+
+  _parseStream (stream) {
+    let result = {
+      audio: null,
+      video: null
+    }
+
+    // at this point we only read one stream
+    let audioTrack = stream.getAudioTracks()[0]
+    let videoTrack = stream.getVideoTracks()[0]
+
+    if (audioTrack) {
+      result['audio'] = this.getMediaTrackDetails(audioTrack)
+    }
+
+    if (videoTrack) {
+      result['video'] = this.getMediaTrackDetails(videoTrack)
+    }
+
+    return result
+  }
+
+  getMediaTrackDetails (track) {
+    return {
+      enabled: track.enabled,
+      id: track.id,
+      contentHint: track.contentHint,
+      kind: track.kind,
+      label: track.label,
+      muted: track.muted,
+      readyState: track.readyState,
+      constructorName: track.constructor.name,
+      capabilities: track.getCapabilities ? track.getCapabilities() : {},
+      constraints: track.getConstraints ? track.getConstraints() : {},
+      settings: track.getSettings ? track.getSettings() : {},
+      _track: track
+    }
+  }
+
+  getStreamDetails (stream) {
+    return {
+      active: stream.active,
+      id: stream.id,
+      _stream: stream
+    }
+  }
+
+  /**
+   * Add event listeners for the tracks that are added to the stream
+   * @param {MediaStreamTrack} track
+   */
+  _addTrackEventListeners (track) {
+    track.addEventListener('mute', (ev) => {
+      this.addCustomEvent('track', {
+        event: 'mute',
+        tag: 'track',
+        data: {
+          event: ev
+        }
+      })
+    })
+    track.addEventListener('unmute', (ev) => {
+      this.addCustomEvent('track', {
+        event: 'unmute',
+        tag: 'track',
+        data: {
+          event: ev
+        }
+      })
+    })
+    track.addEventListener('overconstrained', (ev) => {
+      this.addCustomEvent('track', {
+        event: 'overconstrained',
+        tag: 'track',
+        data: {
+          event: ev
+        }
+      })
+    })
+  }
+
   addToTimeline (event) {
     // if we are missing the peerId
     // this would happen if addPeer() method is called a little late
-    if (!event.peerId) {
-      // if we only have one peer, then just add its id
+    if (!event.peerId && event.event !== 'getUserMedia') {
       let peers = Object.keys(this._peersToMonitor)
+      // if we only have one peer, then just add its id
       if (peers.length === 1) {
         event.peerId = peers[0] // same as pc.__rtcStatsId
       }
@@ -756,11 +869,15 @@ export class WebRTCStats extends EventEmitter {
     this.emit('timeline', ev)
   }
 
-  parseGetUserMedia (options) {
-    this.addToTimeline({
-      event: 'getUserMedia',
-      tag: 'getUserMedia',
-      data: options
-    })
+  /**
+   * Used to emit a custome event and also add it to the timeline
+   * @param {String} eventName The name of the custome event: track, getUserMedia, stats, etc
+   * @param {Object} options   The object tha will be sent with the event
+   */
+  addCustomEvent (eventName, options) {
+    this.addToTimeline(options)
+    if (eventName) {
+      this.emit(eventName, options)
+    }
   }
 }
