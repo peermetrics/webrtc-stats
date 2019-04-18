@@ -1,6 +1,6 @@
 {
   "name": "@peermetrics/webrtc-stats",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Library that helps you read webrtc stats.",
   "main": "dist/index.js",
   "browser": "dist/browser.js",
@@ -8,10 +8,7 @@
   "repository": "https://github.com/peermetrics/webrtc-stats",
   "author": "Andrei Onel <andrei@peermetrics.io>",
   "license": "MIT",
-  "keywords": [
-    "webrtc",
-    "browser"
-  ],
+  "keywords": [],
   "scripts": {
     "build": "rollup -c && npm run copy",
     "serve": "npm run build && http-server dist",
@@ -25,7 +22,6 @@
   "engines": {
     "node": ">=8"
   },
-  "keywords": [],
   "dependencies": {},
   "devDependencies": {
     "cpy-cli": "^2.0.0",
