@@ -7,6 +7,12 @@ WebRTC Stats is using `EventEmitter` to fire events that you can listen to in yo
 
 The library is heavily inspired by [@fippo](https://github.com/fippo)'s work on a similar library.
 
+## How it works
+
+The main idea of WebRTC Stats is to offer an easy way to read stats from `RTCPeerConnection`s. It helps with gathering the stats and has a pretty helpful object that helps you understand how that connection is going.
+
+On top of that, it offers the `timeline` which is a list of events gathered from the RTC connections that will definitely help you with debugging. These are optional, but by wrapping methods like `getUserMedia`, `createOffer`, `addTrack`, etc. you get a clear picture of what happened.
+
 ## Install
 ```sh
 npm install @peermetrics/webrtc-stats
@@ -87,6 +93,7 @@ let stats = new WebRTCStats({
 #### `.addPeer(options)`
 Adds a peer to the watch list.
 `options`
+
   - `pc`: the `RTCPeerConnection` instance
   - `peerId`: String/Int a unique Id to identify this peer
 Monitoring of a peer will automatically end when the connection is closed.
@@ -102,6 +109,7 @@ stats.on('eventName', (ev) => {
 })
 ```
 `ev` will have the following structure:
+
 ```js
 {
     # The event name. Usually the method called (addTrack, createAnswer)
