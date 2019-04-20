@@ -19,23 +19,23 @@ npm install @peermetrics/webrtc-stats
 ```
 
 ## Usage
-### Loding the module
+### Loading the module
 WebRTC Stats can be loaded as an ES6 module, node module or directly in the browser.
 
 After loading the module, initialize it. 
-*See [Options](#options) for all the initalize options*
+*See [Options](#options) for all the initialize options*
 ```js
 let stats = new WebRTCStats({
     getStatsInterval: 5000
 })
 ```
-Add events listeners on the to listen to the `stats` event:
+Add event listeners for `stats`:
 ```js
 stats.on('stats', (ev) => {
     console.log('stats', ev)
 })
 ```
-Use the `stats` object to add peers to the list to monitor:
+Use `addPeer` to add peers to the list of monitored peers:
 ```js
 let pc1 = new Peer({...})
 stats.addPeer({
@@ -43,7 +43,7 @@ stats.addPeer({
     peerId: '1' # any string/int that helps you identify this peer
 })
 ```
-Now every `5000` ms  WebRTC Stats will fire the `stats` event that will come with and object has the option
+Now every `5000` ms  WebRTC Stats will fire the `stats` event which will come with the object:
 ```js
 {
     event: 'stats',
