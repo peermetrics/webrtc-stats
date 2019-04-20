@@ -14,11 +14,18 @@
       <script src="browser.js"></script>
       <script type="module">
           window.stats = new WebRTCStats({
-            getStatsInterval: 5000
+            getStatsInterval: 5000,
+            rawStats: true,
+            statsObject: true,
+            filteredStats: true,
+            wrapRTCPeerConnection: true,
+            wrapGetUserMedia: true,
+            wrapLegacyGetUserMedia: false,
+            debug: true
           })
 
-          window.stats.on('stats', (ev) => {
-            console.log('stats', ev)
+          window.stats.on('timeline', (ev) => {
+            console.log('timeline', ev)
           })
       </script> 
 

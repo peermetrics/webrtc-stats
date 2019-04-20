@@ -682,7 +682,7 @@
        */
       this.monitoringSetInterval = null;
 
-      this.wrapRTCPeerConnection = options.wrapRTCPeerConnection || false;
+      this.shouldWrapRTCPeerConnection = options.wrapRTCPeerConnection || false;
 
       this.rawStats = options.rawStats || false;
       this.statsObject = options.statsObject || false;
@@ -691,7 +691,7 @@
       this.compressStats = options.compressStats || false;
 
       // getUserMedia options
-      this.wrapGetUserMedia = options.wrapGetUserMedia || false;
+      this.shouldWrapGetUserMedia = options.wrapGetUserMedia || false;
       this.wrapLegacyGetUserMedia = options.wrapLegacyGetUserMedia || false;
       this.prefixesToWrap = options.prefixesToWrap || legacyMethodsPrefixes;
 
@@ -731,12 +731,12 @@
       ];
 
       // add event listeners for getUserMedia
-      if (this.wrapGetUserMedia) {
+      if (this.shouldWrapGetUserMedia) {
         this.wrapGetUserMedia();
       }
 
       // wrap RTCPeerConnection methods so we can fire timeline events
-      if (this.wrapRTCPeerConnection) {
+      if (this.shouldWrapRTCPeerConnection) {
         this.wrapRTCPeerConnection();
       }
     }
@@ -1376,9 +1376,20 @@
           data: pc.iceGatheringState
         });
       });
+      pc.addEventListener('icecandidateerror', (ev) => {
+        this.addToTimeline({
+          event: 'onicecandidateerror',
+          tag: 'ice',
+          peerId: id,
+          error: {
+            errorCode: ev.errorCode
+          }
+        });
+      });
       pc.addEventListener('connectionstatechange', () => {
         this.addToTimeline({
           event: 'onconnectionstatechange',
+          tag: 'ice',
           peerId: id,
           data: pc.connectionState
         });
@@ -1386,6 +1397,7 @@
       pc.addEventListener('negotiationneeded', () => {
         this.addToTimeline({
           event: 'onnegotiationneeded',
+          tag: 'ice',
           peerId: id
         });
       });
@@ -1499,16 +1511,6 @@
     }
 
     addToTimeline (event) {
-      // if we are missing the peerId
-      // this would happen if addPeer() method is called a little late
-      if (!event.peerId && event.event !== 'getUserMedia') {
-        let peers = Object.keys(this._peersToMonitor);
-        // if we only have one peer, then just add its id
-        if (peers.length === 1) {
-          event.peerId = peers[0]; // same as pc.__rtcStatsId
-        }
-      }
-
       let ev = {
         ...event
       };
