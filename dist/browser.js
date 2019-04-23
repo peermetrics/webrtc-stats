@@ -86,16 +86,16 @@
       switch (report.type) {
         case 'outbound-rtp': {
           let mediaType = report.mediaType || report.kind;
-          let remote = {};
+          let local = {};
           let codecInfo = {};
           if (!['audio', 'video'].includes(mediaType)) continue
 
           statsObject[mediaType].local = report;
 
           if (report.remoteId) {
-            remote = stats.get(report.remoteId);
+            local = stats.get(report.remoteId);
           } else if (report.trackId) {
-            remote = stats.get(report.trackId);
+            local = stats.get(report.trackId);
           }
 
           if (report.codecId) {
@@ -106,10 +106,7 @@
             codecInfo.payloadType = codec.payloadType;
           }
 
-          statsObject[mediaType].local = {...report, ...remote, ...codecInfo};
-
-          // delete statsObject[mediaType].local.id
-          // delete statsObject[mediaType].local.type
+          statsObject[mediaType].local = {...report, ...local, ...codecInfo};
           break
         }
         case 'inbound-rtp':
@@ -140,10 +137,7 @@
             codecInfo.payloadType = codec.payloadType;
           }
 
-          statsObject[mediaType].local = {...report, ...remote, ...codecInfo};
-
-          // delete statsObject[mediaType].remote.id
-          // delete statsObject[mediaType].remote.type
+          statsObject[mediaType].remote = {...report, ...remote, ...codecInfo};
           break
         case 'candidate-pair': {
           statsObject.connection = {...report};
@@ -151,22 +145,11 @@
           if (statsObject.connection.localCandidateId) {
             let localCandidate = stats.get(statsObject.connection.localCandidateId);
             statsObject.connection.local = {...localCandidate};
-            // statsObject.connection.localIp = localCandidate.ip
-            // statsObject.connection.localPort = localCandidate.port
-            // statsObject.connection.localPriority = localCandidate.priority
-            // statsObject.connection.localProtocol = localCandidate.protocol
-            // statsObject.connection.localType = localCandidate.candidateType
-            // statsObject.connection.networkType = localCandidate.networkType
           }
 
           if (statsObject.connection.remoteCandidateId) {
             let remoteCandidate = stats.get(statsObject.connection.localCandidateId);
             statsObject.connection.remote = {...remoteCandidate};
-            // statsObject.connection.remoteIp = remoteCandidate.ip
-            // statsObject.connection.remotePort = remoteCandidate.port
-            // statsObject.connection.remotePriority = remoteCandidate.priority
-            // statsObject.connection.remoteProtocol = remoteCandidate.protocol
-            // statsObject.connection.remoteType = remoteCandidate.candidateType
           }
 
           break
@@ -1110,7 +1093,7 @@
 
       this.monitoringSetInterval = window.setInterval(() => {
         // if we ran out of peers to monitor
-        if (!Object.keys(this._peersToMonitor)) {
+        if (!Object.keys(this._peersToMonitor).length) {
           window.clearInterval(this.monitoringSetInterval);
         }
 
