@@ -6,6 +6,45 @@ Object.defineProperty(exports, '__esModule', { value: true });
  * A set of methods used to parse the rtc stats
  */
 
+function addAdditionalData (currentStats, previousStats) {
+  // we need the previousStats stats to compute thse values
+  if (!previousStats) return currentStats
+
+  // audio
+  currentStats.audio.local.bitrate = computeBitrate(currentStats.audio.local, previousStats.audio.local, 'bytesSent');
+  currentStats.audio.local.packetRate = computeRate(currentStats.audio.local, previousStats.audio.local, 'packetsSent');
+
+  currentStats.audio.remote.bitrate = computeBitrate(currentStats.audio.remote, previousStats.audio.remote, 'bytesReceived');
+  currentStats.audio.remote.packetRate = computeRate(currentStats.audio.remote, previousStats.audio.remote, 'packetsReceived');
+
+  // video
+  currentStats.video.local.bitrate = computeBitrate(currentStats.video.local, previousStats.video.local, 'bytesSent');
+  currentStats.video.local.packetRate = computeRate(currentStats.video.local, previousStats.video.local, 'packetsSent');
+
+  currentStats.video.remote.bitrate = computeBitrate(currentStats.video.remote, previousStats.video.remote, 'bytesReceived');
+  currentStats.video.remote.packetRate = computeRate(currentStats.video.remote, previousStats.video.remote, 'packetsReceived');
+
+  return currentStats
+}
+
+function getCandidatePairInfo (candidatePair, stats) {
+  if (!candidatePair || !stats) return {}
+
+  let connection = {...candidatePair};
+
+  if (connection.localCandidateId) {
+    let localCandidate = stats.get(connection.localCandidateId);
+    connection.local = {...localCandidate};
+  }
+
+  if (connection.remoteCandidateId) {
+    let remoteCandidate = stats.get(connection.localCandidateId);
+    connection.remote = {...remoteCandidate};
+  }
+
+  return connection
+}
+
 // Takes two stats reports and determines the rate based on two counter readings
 // and the time between them (which is in units of milliseconds).
 function computeRate (newReport, oldReport, statName) {
@@ -31,27 +70,6 @@ function map2obj (stats) {
     o[k] = v;
   });
   return o
-}
-
-function addAdditionalData (currentStats, previousStats) {
-  // we need the previousStats stats to compute thse values
-  if (!previousStats) return currentStats
-
-  // audio
-  currentStats.audio.local.bitrate = computeBitrate(currentStats.audio.local, previousStats.audio.local, 'bytesSent');
-  currentStats.audio.local.packetRate = computeRate(currentStats.audio.local, previousStats.audio.local, 'packetsSent');
-
-  currentStats.audio.remote.bitrate = computeBitrate(currentStats.audio.remote, previousStats.audio.remote, 'bytesReceived');
-  currentStats.audio.remote.packetRate = computeRate(currentStats.audio.remote, previousStats.audio.remote, 'packetsReceived');
-
-  // video
-  currentStats.video.local.bitrate = computeBitrate(currentStats.video.local, previousStats.video.local, 'bytesSent');
-  currentStats.video.local.packetRate = computeRate(currentStats.video.local, previousStats.video.local, 'packetsSent');
-
-  currentStats.video.remote.bitrate = computeBitrate(currentStats.video.remote, previousStats.video.remote, 'bytesReceived');
-  currentStats.video.remote.packetRate = computeRate(currentStats.video.remote, previousStats.video.remote, 'packetsReceived');
-
-  return currentStats
 }
 
 // Enumerates the new standard compliant stats using local and remote track ids.
@@ -101,16 +119,17 @@ function parseStats (stats, previousStats) {
 
         if (report.codecId) {
           let codec = stats.get(report.codecId);
-          if (!codec) continue
-          codecInfo.clockRate = codec.clockRate;
-          codecInfo.mimeType = codec.mimeType;
-          codecInfo.payloadType = codec.payloadType;
+          if (codec) {
+            codecInfo.clockRate = codec.clockRate;
+            codecInfo.mimeType = codec.mimeType;
+            codecInfo.payloadType = codec.payloadType;
+          }
         }
 
         statsObject[mediaType].local = {...report, ...local, ...codecInfo};
         break
       }
-      case 'inbound-rtp':
+      case 'inbound-rtp': {
         let mediaType = report.mediaType || report.kind;
         let remote = {};
         let codecInfo = {};
@@ -132,34 +151,44 @@ function parseStats (stats, previousStats) {
 
         if (report.codecId) {
           let codec = stats.get(report.codecId);
-          if (!codec) continue
-          codecInfo.clockRate = codec.clockRate;
-          codecInfo.mimeType = codec.mimeType;
-          codecInfo.payloadType = codec.payloadType;
+          if (codec) {
+            codecInfo.clockRate = codec.clockRate;
+            codecInfo.mimeType = codec.mimeType;
+            codecInfo.payloadType = codec.payloadType;
+          }
+        }
+
+        // if we don't have connection details already saved
+        // and the transportId is present (most likely chrome)
+        // get the details from the candidate-pair
+        if (!statsObject.connection.id && report.transportId) {
+          let transport = stats.get(report.transportId);
+          if (transport && transport.selectedCandidatePairId) {
+            let candidatePair = stats.get(transport.selectedCandidatePairId);
+            statsObject.connection = getCandidatePairInfo(candidatePair, stats);
+          }
         }
 
         statsObject[mediaType].remote = {...report, ...remote, ...codecInfo};
         break
-      case 'candidate-pair': {
-        statsObject.connection = {...report};
-
-        if (statsObject.connection.localCandidateId) {
-          let localCandidate = stats.get(statsObject.connection.localCandidateId);
-          statsObject.connection.local = {...localCandidate};
-        }
-
-        if (statsObject.connection.remoteCandidateId) {
-          let remoteCandidate = stats.get(statsObject.connection.localCandidateId);
-          statsObject.connection.remote = {...remoteCandidate};
-        }
-
-        break
       }
-      case 'peer-connection':
+      case 'peer-connection': {
         statsObject.connection.dataChannelsClosed = report.dataChannelsClosed;
         statsObject.connection.dataChannelsOpened = report.dataChannelsOpened;
         break
+      }
       default:
+    }
+  }
+
+  // if we didn't find a candidate-pair while going through inbound-rtp
+  // look for it again
+  if (!statsObject.connection.id) {
+    for (const report of stats.values()) {
+      // select the current active candidate-pair report
+      if (report.type === 'candidate-pair' && report.nominated && report.state === 'succeeded') {
+        statsObject.connection = getCandidatePairInfo(report, stats);
+      }
     }
   }
 
