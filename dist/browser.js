@@ -37,7 +37,7 @@
     }
 
     if (connection.remoteCandidateId) {
-      let remoteCandidate = stats.get(connection.localCandidateId);
+      let remoteCandidate = stats.get(connection.remoteCandidateId);
       connection.remote = {...remoteCandidate};
     }
 
