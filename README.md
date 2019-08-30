@@ -143,3 +143,8 @@ Some events are not fired if for example `wrapLegacyGetUserMedia` and `wrapRTCPe
 
 ## License
 MIT
+
+## Sponsorship
+Platform testing is generously offered by BrowserStack
+<br>
+<img src="https://user-images.githubusercontent.com/1862405/64006512-2b265a00-cb1b-11e9-9e28-d8afb305315a.png" alt="Browserstack" width="300">
