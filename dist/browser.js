@@ -1070,6 +1070,7 @@
         event: 'addPeer',
         tag: 'peer',
         data: {
+          peerId: id,
           options: options,
           peerConfiguration: config
         }
