@@ -28,12 +28,12 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "cpy-cli": "^2.0.0",
-    "del-cli": "^1.1.0",
+    "cpy-cli": "^3.0.0",
+    "del-cli": "^3.0.0",
     "http-server": "^0.11.1",
-    "rollup": "^1.20.3",
+    "rollup": "^1.29.1",
     "rollup-plugin-node-builtins": "^2.1.2",
-    "standard": "^11.0.0"
+    "standard": "^14.0.0"
   },
   "publishConfig": {
     "access": "public"
