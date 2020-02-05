@@ -104,7 +104,9 @@ export class WebRTCStats extends EventEmitter {
       return this._timeline.filter((event) => event.tag === tag)
     }
 
-    return this._timeline
+    return this._timeline.sort(
+      (ev1, ev2) => ev1.timestamp.getTime() - ev2.timestamp.getTime()
+    );
   }
 
   wrapGetUserMedia (options = {}) {
@@ -865,6 +867,7 @@ export class WebRTCStats extends EventEmitter {
 
   addToTimeline (event) {
     let ev = {
+      timestamp: new Date(),
       ...event
     }
     this._timeline.push(ev)
