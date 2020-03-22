@@ -78,10 +78,10 @@ export class WebRTCStats extends EventEmitter {
   }
 
   /**
-   * Start tracking connection with a peer
+   * Start tracking a RTCPeerConnection
    * @param {Object} options The options object
    */
-  public addPeer (options: AddPeerOptions) {
+  public addPeer (options: AddPeerOptions): Promise<void> {
     return new Promise((resolve, reject) => {
       const {pc, peerId} = options
 
@@ -132,7 +132,7 @@ export class WebRTCStats extends EventEmitter {
    * @param  {String} tag The tag to filter events (optional)
    * @return {Array}     The timeline array (or sub array if tag is defined)
    */
-  public getTimeline (tag) {
+  public getTimeline (tag): TimelineEvent[] {
     if (tag) {
       return this.timeline.filter((event) => event.tag === tag)
     }
