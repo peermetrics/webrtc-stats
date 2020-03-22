@@ -7,6 +7,9 @@ WebRTC Stats is using `EventEmitter` to fire events that you can listen to in yo
 
 The library is heavily inspired by [@fippo](https://github.com/fippo)'s work on a similar library.
 
+#### Migrating from v1
+To see the changes that appeared in V2 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v2.0.0)
+
 ## How it works
 
 The main idea of WebRTC Stats is to offer an easy way to read stats from `RTCPeerConnection`s. It helps with gathering the stats and has a pretty helpful object that helps you understand how that connection is going.
@@ -49,6 +52,7 @@ Now every `5000` ms  WebRTC Stats will fire the `stats` event which will come wi
     event: 'stats',
     tag: 'stats',
     peerId: '1',
+    timestamp: 'Sun Mar 22 2020 18:02:02', # a timestamp when this was fired
     data: {...}, # an object created after parsing the stats
     rawStats: RTCStatsReport, # the actual RTCStatsReport results from `getStats()`
     statsObject: {}, # an object created from RTCStatsReport that uses the `id` for each report as a key
@@ -72,17 +76,8 @@ let stats = new WebRTCStats({
     # if we should filter out some stats
     filteredStats: false, # Default: false
     
-    # If we should wrap methods from the `PeerConnection` class to capture events in the timeline. 
-    # Wraps methods like: `addTrack`, `removeTrack`,  'createOffer', 'createAnswer', etc
-    wrapRTCPeerConnection: false, # Default: false
-
     # If we should wrap the `geUserMedia` calls so we can gather events when the methods is called or success/error
     wrapGetUserMedia: false, # Default: false
-    # If he module should wrape legacy `getUserMedia` metods: `navigator.getUserMedia`, `navigator.mozGetUserMedia`, navigator.webkitGetUserMedia
-    wrapLegacyGetUserMedia: false, # Default: false
-    
-    # What prefixes for `getUserMedia` we should wrap, only is if `wrapLegacyGetUserMedia` is true
-    prefixesToWrap: [], # Default: ['', 'moz', 'webkit'],
     
     # If turned on, calls `console.log`
     debug: false, # Default: false
@@ -100,7 +95,7 @@ Monitoring of a peer will automatically end when the connection is closed.
 
 #### `.getTimeline([filter])`
 Return the array of events from the timeline up to that point.
-If the optional `filter` string is present it will filter out events. Possible values: `peer`, `ice`, `sdp`, `track`, `stats`, `getUserMedia`
+If the optional `filter` string is present it will filter out events. Possible values: `peer`, `connection`, `track`, `stats`, `getUserMedia`
 
 ### Events
 The module uses `EventEmitter` to emit events. You can listen to them using `.on()`
@@ -118,10 +113,12 @@ stats.on('eventName', (ev) => {
     tag: '',
     # The id for the peer that fired this event
     peerId: '',
+    # A timestamp for when the event happened
+    timestamp: '',
     # Data for each event type
     data: {},
     
-    # The following appear certain times
+    # The following attrs appear at certain times
     # The error that appeared in the method we were watching
     error: {},
     # These appear on the `stats` event
@@ -138,8 +135,8 @@ Some events are not fired if for example `wrapLegacyGetUserMedia` and `wrapRTCPe
 - `getUserMedia`: when `getUserMedia` is called initially
 - `peer`: when a peer was added
 - `track`: a track event: addTrack, removeTrack, mute, unmute, overconstrained
-- `sdp`
-- `ice`
+- `connection`: any event related to connection
+- `datachannel`: any datachannel event
 
 ## License
 MIT
