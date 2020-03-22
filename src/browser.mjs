@@ -1,4 +1,4 @@
 
-import { WebRTCStats } from './module.mjs'
+import { WebRTCStats } from './module'
 
 window.WebRTCStats = WebRTCStats

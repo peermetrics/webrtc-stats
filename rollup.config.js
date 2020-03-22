@@ -1,9 +1,15 @@
+import typescript from '@rollup/plugin-typescript'
+
 import builtins from 'rollup-plugin-node-builtins'
+import babel from 'rollup-plugin-babel'
 
 import pkg from './package.json'
+import babelConfig from './.babelrc.json'
 
 const plugins = [
-  builtins()
+  builtins(),
+  typescript(),
+  babel(babelConfig)
 ]
 
 export default [{
@@ -16,7 +22,7 @@ export default [{
   ],
   plugins: plugins
 }, {
-  input: 'src/module.mjs',
+  input: 'src/module.ts',
   output: [
     {
       file: pkg.main,

@@ -4,7 +4,7 @@
   "description": "Library that helps you read webrtc stats.",
   "main": "dist/index.js",
   "browser": "dist/browser.js",
-  "module": "src/module.mjs",
+  "module": "src/module.ts",
   "repository": "https://github.com/peermetrics/webrtc-stats",
   "author": "Andrei Onel <andrei@peermetrics.io>",
   "license": "MIT",
@@ -14,9 +14,9 @@
     "stats"
   ],
   "scripts": {
-    "build": "rollup -c && npm run copy",
-    "serve": "npm run build && http-server dist",
-    "start": "rollup -c -w",
+    "build": "rollup -c",
+    "serve": "npm run build && npm run copy && http-server dist",
+    "watch": "rollup -c -w",
     "clean": "del dist",
     "copy": "cpy './src/index.html' './dist'",
     "prepublishOnly": "npm run build",
@@ -28,12 +28,20 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@babel/core": "^7.8.3",
+    "@babel/preset-env": "^7.8.3",
+    "@babel/preset-typescript": "^7.8.3",
+    "@rollup/plugin-typescript": "^4.0.0",
+    "@types/webrtc": "0.0.26",
+    "babel-preset-minify": "^0.5.1",
     "cpy-cli": "^3.0.0",
     "del-cli": "^3.0.0",
-    "http-server": "^0.11.1",
+    "http-server": "^0.12.1",
     "rollup": "^1.29.1",
+    "rollup-plugin-babel": "^4.3.3",
     "rollup-plugin-node-builtins": "^2.1.2",
-    "standard": "^14.0.0"
+    "standard": "^14.0.0",
+    "typescript": "^3.8.3"
   },
   "publishConfig": {
     "access": "public"

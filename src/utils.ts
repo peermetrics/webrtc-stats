@@ -1,3 +1,5 @@
+import { StatsObject, CodecInfo } from './types/index'
+
 /**
  * A set of methods used to parse the rtc stats
  */
@@ -26,16 +28,16 @@ function addAdditionalData (currentStats, previousStats) {
 function getCandidatePairInfo (candidatePair, stats) {
   if (!candidatePair || !stats) return {}
 
-  let connection = {...candidatePair}
+  const connection = { ...candidatePair }
 
   if (connection.localCandidateId) {
-    let localCandidate = stats.get(connection.localCandidateId)
-    connection.local = {...localCandidate}
+    const localCandidate = stats.get(connection.localCandidateId)
+    connection.local = { ...localCandidate }
   }
 
   if (connection.remoteCandidateId) {
-    let remoteCandidate = stats.get(connection.remoteCandidateId)
-    connection.remote = {...remoteCandidate}
+    const remoteCandidate = stats.get(connection.remoteCandidateId)
+    connection.remote = { ...remoteCandidate }
   }
 
   return connection
@@ -43,9 +45,9 @@ function getCandidatePairInfo (candidatePair, stats) {
 
 // Takes two stats reports and determines the rate based on two counter readings
 // and the time between them (which is in units of milliseconds).
-export function computeRate (newReport, oldReport, statName) {
-  var newVal = newReport[statName]
-  var oldVal = (oldReport) ? oldReport[statName] : null
+export function computeRate (newReport: any, oldReport: any, statName: string): number {
+  const newVal = newReport[statName]
+  const oldVal = (oldReport) ? oldReport[statName] : null
   if (newVal === null || oldVal === null) {
     return null
   }
@@ -53,15 +55,15 @@ export function computeRate (newReport, oldReport, statName) {
 }
 
 // Convert a byte rate to a bit rate.
-export function computeBitrate (newReport, oldReport, statName) {
+export function computeBitrate (newReport: any, oldReport: any, statName: string): number {
   return computeRate(newReport, oldReport, statName) * 8
 }
 
-export function map2obj (stats) {
+export function map2obj (stats: any) {
   if (!stats.entries) {
     return stats
   }
-  var o = {}
+  const o = {}
   stats.forEach(function (v, k) {
     o[k] = v
   })
@@ -69,7 +71,7 @@ export function map2obj (stats) {
 }
 
 // Enumerates the new standard compliant stats using local and remote track ids.
-export function parseStats (stats, previousStats) {
+export function parseStats (stats: any, previousStats: StatsObject | null): StatsObject {
   // Create an object structure with all the needed stats and types that we care
   // about. This allows to map the getStats stats to other stats names.
 
@@ -92,17 +94,14 @@ export function parseStats (stats, previousStats) {
       local: {},
       remote: {}
     }
-  }
+  } as StatsObject
 
   for (const report of stats.values()) {
-    // ignore all remote reports
-    if (report.isRemote) continue
-
     switch (report.type) {
       case 'outbound-rtp': {
-        let mediaType = report.mediaType || report.kind
+        const mediaType = report.mediaType || report.kind
         let local = {}
-        let codecInfo = {}
+        const codecInfo = {} as CodecInfo
         if (!['audio', 'video'].includes(mediaType)) continue
 
         statsObject[mediaType].local = report
@@ -114,7 +113,7 @@ export function parseStats (stats, previousStats) {
         }
 
         if (report.codecId) {
-          let codec = stats.get(report.codecId)
+          const codec = stats.get(report.codecId)
           if (codec) {
             codecInfo.clockRate = codec.clockRate
             codecInfo.mimeType = codec.mimeType
@@ -122,13 +121,13 @@ export function parseStats (stats, previousStats) {
           }
         }
 
-        statsObject[mediaType].local = {...report, ...local, ...codecInfo}
+        statsObject[mediaType].local = { ...report, ...local, ...codecInfo }
         break
       }
       case 'inbound-rtp': {
         let mediaType = report.mediaType || report.kind
         let remote = {}
-        let codecInfo = {}
+        const codecInfo = {} as CodecInfo
 
         // Safari is missing mediaType and kind for 'inbound-rtp'
         if (!['audio', 'video'].includes(mediaType)) {
@@ -146,7 +145,7 @@ export function parseStats (stats, previousStats) {
         }
 
         if (report.codecId) {
-          let codec = stats.get(report.codecId)
+          const codec = stats.get(report.codecId)
           if (codec) {
             codecInfo.clockRate = codec.clockRate
             codecInfo.mimeType = codec.mimeType
@@ -158,14 +157,14 @@ export function parseStats (stats, previousStats) {
         // and the transportId is present (most likely chrome)
         // get the details from the candidate-pair
         if (!statsObject.connection.id && report.transportId) {
-          let transport = stats.get(report.transportId)
+          const transport = stats.get(report.transportId)
           if (transport && transport.selectedCandidatePairId) {
-            let candidatePair = stats.get(transport.selectedCandidatePairId)
+            const candidatePair = stats.get(transport.selectedCandidatePairId)
             statsObject.connection = getCandidatePairInfo(candidatePair, stats)
           }
         }
 
-        statsObject[mediaType].remote = {...report, ...remote, ...codecInfo}
+        statsObject[mediaType].remote = { ...report, ...remote, ...codecInfo }
         break
       }
       case 'peer-connection': {
