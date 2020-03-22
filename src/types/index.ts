@@ -17,6 +17,7 @@ export type TimelineTag = 'getUserMedia' | 'peer' | 'connection' | 'track' | 'da
 export interface TimelineEvent {
     event: string
     tag: TimelineTag
+    timestamp?: Date
     data?: any
     peerId?: string
     error?: any

@@ -133,6 +133,11 @@ export class WebRTCStats extends EventEmitter {
    * @return {Array}     The timeline array (or sub array if tag is defined)
    */
   public getTimeline (tag): TimelineEvent[] {
+    // sort the events by timestamp
+    this.timeline = this.timeline.sort(
+      (event1, event2) => event1.timestamp.getTime() - event2.timestamp.getTime()
+    )
+
     if (tag) {
       return this.timeline.filter((event) => event.tag === tag)
     }
@@ -514,7 +519,8 @@ export class WebRTCStats extends EventEmitter {
 
   private addToTimeline (event: TimelineEvent) {
     const ev = {
-      ...event
+      ...event,
+      timestamp: new Date()
     }
     this.timeline.push(ev)
 
