@@ -40,7 +40,7 @@ stats.on('stats', (ev) => {
 ```
 Use `addPeer` to add peers to the list of monitored peers:
 ```js
-let pc1 = new Peer({...})
+let pc1 = new RTCPeerConnection({...})
 stats.addPeer({
     pc: pc1,
     peerId: '1' # any string/int that helps you identify this peer
