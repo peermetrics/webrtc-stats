@@ -187,6 +187,8 @@ export class WebRTCStats extends EventEmitter {
       // if we ran out of peers to monitor
       if (!Object.keys(this.peersToMonitor).length) {
         window.clearInterval(this.monitoringSetInterval)
+
+        this.monitoringSetInterval = 0
       }
 
       for (const key in this.peersToMonitor) {
