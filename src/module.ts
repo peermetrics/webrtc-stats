@@ -8,13 +8,14 @@ const debug = console.log.bind(console.log)
 export class WebRTCStats extends EventEmitter {
   private isEdge: boolean
   private getStatsInterval: number
-  private monitoringSetInterval: number = 0
+  private monitoringSetInterval: any
   private rawStats: boolean
   private statsObject: boolean
   private filteredStats: boolean
   private shouldWrapGetUserMedia: boolean
   private debug: any
   private peersToMonitor: MonitoredPeersObject = {}
+  private wrtc: any
 
   /**
    * Used to keep track of all the events
@@ -44,14 +45,21 @@ export class WebRTCStats extends EventEmitter {
   constructor (constructorOptions: WebRTCStatsConstructorOptions) {
     super()
 
-    // only works in the browser
-    if (typeof window === 'undefined') {
-      throw new Error('WebRTCStats only works in browser')
+    try {
+        const test = typeof window
+    } catch (error) {
+        if (constructorOptions.wrtc === undefined) {
+            throw new Error('WebRTCStats runs in non-browser environment, you must specify `wrtc` option')
+        }
     }
 
     const options = {...constructorOptions}
 
-    this.isEdge = !!window.RTCIceGatherer
+    try {
+        this.isEdge = !!window.RTCIceGatherer
+    } catch (error) {
+        this.isEdge = false
+    }
 
     this.getStatsInterval = options.getStatsInterval || 1000
     if (!this.getStatsInterval || !Number.isInteger(this.getStatsInterval)) {
@@ -64,6 +72,9 @@ export class WebRTCStats extends EventEmitter {
 
     // getUserMedia options
     this.shouldWrapGetUserMedia = !!options.wrapGetUserMedia
+    this.wrtc = options.wrtc
+        ? options.wrtc
+        : window
 
     /**
      * If we want to enable debug
@@ -83,6 +94,7 @@ export class WebRTCStats extends EventEmitter {
    */
   public addPeer (options: AddPeerOptions): Promise<void> {
     return new Promise((resolve, reject) => {
+      const {RTCPeerConnection} = this.wrtc
       const {pc, peerId} = options
 
       if (!pc || !(pc instanceof RTCPeerConnection)) {
@@ -183,10 +195,10 @@ export class WebRTCStats extends EventEmitter {
   private startMonitoring () {
     if (this.monitoringSetInterval) return
 
-    this.monitoringSetInterval = window.setInterval(() => {
+    this.monitoringSetInterval = setInterval(() => {
       // if we ran out of peers to monitor
       if (!Object.keys(this.peersToMonitor).length) {
-        window.clearInterval(this.monitoringSetInterval)
+        clearInterval(this.monitoringSetInterval)
 
         this.monitoringSetInterval = 0
       }
@@ -342,7 +354,7 @@ export class WebRTCStats extends EventEmitter {
 
     pc.addEventListener('track', (e) => {
       const track = e.track
-      const stream = e.streams[0]
+      const stream = e.streams[0] || null
 
       // save the remote stream
       this.peersToMonitor[id].stream = stream
@@ -353,7 +365,7 @@ export class WebRTCStats extends EventEmitter {
         tag: 'track',
         peerId: id,
         data: {
-          stream: this.getStreamDetails(stream),
+          stream: stream ? this.getStreamDetails(stream) : null,
           track: this.getMediaTrackDetails(track),
           title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) { return 'stream:' + stream.id })
         }
