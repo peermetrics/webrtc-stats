@@ -8,6 +8,7 @@ export interface WebRTCStatsConstructorOptions {
     compressStats: boolean
     wrapGetUserMedia: boolean
     wrapLegacyGetUserMedia: boolean
+    wrtc: any
     prefixesToWrap: string[]
     debug: boolean
 }
