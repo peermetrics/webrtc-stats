@@ -265,48 +265,6 @@ export class WebRTCStats extends EventEmitter {
   }
 
   /**
-   * Used to get the tracks for local and remote tracks
-   * @param  {RTCPeerConnection} pc
-   * @return {Object}
-   */
-  private getPeerConnectionTracks (pc: RTCPeerConnection) {
-    const result = {
-      localTrackIds: {
-        audio: null,
-        video: null
-      },
-      remoteTrackIds: {
-        audio: null,
-        video: null
-      }
-    }
-
-    const local = pc.getSenders()
-    for (const rtpSender of local) {
-      if (rtpSender.track) {
-        if (rtpSender.track.kind === 'audio') {
-          result.localTrackIds.audio = rtpSender.track
-        } else if (rtpSender.track.kind === 'video') {
-          result.localTrackIds.video = rtpSender.track
-        }
-      }
-    }
-
-    const remote = pc.getReceivers()
-    for (const rtpSender of remote) {
-      if (rtpSender.track) {
-        if (rtpSender.track.kind === 'audio') {
-          result.remoteTrackIds.audio = rtpSender.track
-        } else if (rtpSender.track.kind === 'video') {
-          result.remoteTrackIds.video = rtpSender.track
-        }
-      }
-    }
-
-    return result
-  }
-
-  /**
    * Filter out some stats, mainly codec and certificate
    * @param  {Object} stats The parsed rtc stats object
    * @return {Object}       The new object with some keys deleted
