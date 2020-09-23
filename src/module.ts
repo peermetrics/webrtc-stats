@@ -470,6 +470,16 @@ export class WebRTCStats extends EventEmitter {
         }
       })
     })
+
+    track.addEventListener('ended', (ev) => {
+      this.addCustomEvent('track', {
+        event: 'ended',
+        tag: 'track',
+        data: {
+          event: ev
+        }
+      })
+    })
   }
 
   private addToTimeline (event: TimelineEvent) {
