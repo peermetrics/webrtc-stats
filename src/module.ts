@@ -191,15 +191,14 @@ export class WebRTCStats extends EventEmitter {
         this.monitoringSetInterval = 0
       }
 
-      for (const key in this.peersToMonitor) {
-        const id = key
+      for (const id in this.peersToMonitor) {
 
-        const peerObject = this.peersToMonitor[key]
+        const peerObject = this.peersToMonitor[id]
         const pc = peerObject.pc
 
         // stop monitoring closed peer connections
         if (!pc || pc.signalingState === 'closed') {
-          delete this.peersToMonitor[key]
+          delete this.peersToMonitor[id]
           continue
         }
 
