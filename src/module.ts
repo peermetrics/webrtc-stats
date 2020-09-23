@@ -1,7 +1,13 @@
-import { EventEmitter } from 'events'
-import { WebRTCStatsConstructorOptions, AddPeerOptions, MonitoredPeersObject, TimelineEvent, GetUserMediaResponse } from './types/index'
+import {EventEmitter} from 'events'
+import {
+  WebRTCStatsConstructorOptions,
+  AddPeerOptions,
+  MonitoredPeersObject,
+  TimelineEvent,
+  GetUserMediaResponse
+} from './types/index'
 
-import { parseStats, map2obj } from './utils'
+import {parseStats, map2obj} from './utils'
 
 const debug = console.log.bind(console.log)
 
@@ -25,21 +31,21 @@ export class WebRTCStats extends EventEmitter {
    * A list of stats to look after
    */
   private statsToMonitor: string[] = [
-      'inbound-rtp',
-      'outbound-rtp',
-      'remote-inbound-rtp',
-      'remote-outbound-rtp',
-      'peer-connection',
-      'data-channel',
-      'stream',
-      'track',
-      'sender',
-      'receiver',
-      'transport',
-      'candidate-pair',
-      'local-candidate',
-      'remote-candidate'
-    ]
+    'inbound-rtp',
+    'outbound-rtp',
+    'remote-inbound-rtp',
+    'remote-outbound-rtp',
+    'peer-connection',
+    'data-channel',
+    'stream',
+    'track',
+    'sender',
+    'receiver',
+    'transport',
+    'candidate-pair',
+    'local-candidate',
+    'remote-candidate'
+  ]
 
   constructor (constructorOptions: WebRTCStatsConstructorOptions) {
     super()
@@ -53,10 +59,8 @@ export class WebRTCStats extends EventEmitter {
 
     this.isEdge = !!window.RTCIceGatherer
 
-    this.getStatsInterval = options.getStatsInterval || 1000
-    if (!this.getStatsInterval || !Number.isInteger(this.getStatsInterval)) {
-      throw new Error(`getStatsInterval should be an integer, got: ${options.getStatsInterval}`)
-    }
+    // TODO a function here is not very consistent with the other declarations
+    this.setStatsInterval(options.getStatsInterval || 1000)
 
     this.rawStats = !!options.rawStats
     this.statsObject = !!options.statsObject
@@ -69,7 +73,8 @@ export class WebRTCStats extends EventEmitter {
      * If we want to enable debug
      * @return {Function}
      */
-    this.debug = options.debug ? debug : function () {}
+    this.debug = options.debug ? debug : function () {
+    }
 
     // add event listeners for getUserMedia
     if (this.shouldWrapGetUserMedia) {
@@ -82,44 +87,44 @@ export class WebRTCStats extends EventEmitter {
    * @param {Object} options The options object
    */
   public async addPeer (options: AddPeerOptions): Promise<void> {
-      const {pc, peerId} = options
+    const {pc, peerId} = options
 
-      if (!pc || !(pc instanceof RTCPeerConnection)) {
-        throw new Error(`Missing argument 'pc' or is not of instance RTCPeerConnection`)
-      }
+    if (!pc || !(pc instanceof RTCPeerConnection)) {
+      throw new Error(`Missing argument 'pc' or is not of instance RTCPeerConnection`)
+    }
 
-      if (!peerId) {
-        throw new Error('Missing argument peerId')
-      }
+    if (!peerId) {
+      throw new Error('Missing argument peerId')
+    }
 
-      if (this.isEdge) {
-        throw new Error('Can\'t monitor peers in Edge at this time.')
-      }
+    if (this.isEdge) {
+      throw new Error('Can\'t monitor peers in Edge at this time.')
+    }
 
-      if (this.peersToMonitor[peerId]) {
-        throw new Error(`We are already monitoring peer with id ${peerId}.`)
-      }
+    if (this.peersToMonitor[peerId]) {
+      throw new Error(`We are already monitoring peer with id ${peerId}.`)
+    }
 
-      const config = pc.getConfiguration()
+    const config = pc.getConfiguration()
 
-      // don't log credentials
-      if (config.iceServers) {
-        config.iceServers.forEach(function (server) {
-          delete server.credential
-        })
-      }
-
-      this.addToTimeline({
-        event: 'addPeer',
-        tag: 'peer',
-        peerId: peerId,
-        data: {
-          options: options,
-          peerConfiguration: config
-        }
+    // don't log credentials
+    if (config.iceServers) {
+      config.iceServers.forEach(function (server) {
+        delete server.credential
       })
+    }
 
-      this.monitorPeer(peerId, pc)
+    this.addToTimeline({
+      event: 'addPeer',
+      tag: 'peer',
+      peerId: peerId,
+      data: {
+        options: options,
+        peerConfiguration: config
+      }
+    })
+
+    this.monitorPeer(peerId, pc)
   }
 
   /**
@@ -281,7 +286,7 @@ export class WebRTCStats extends EventEmitter {
     return fullObject
   }
 
-  private addPeerConnectionEventListeners (peerId: string, pc:RTCPeerConnection): void {
+  private addPeerConnectionEventListeners (peerId: string, pc: RTCPeerConnection): void {
     const id = peerId
 
     pc.addEventListener('icecandidate', (e) => {
@@ -308,7 +313,9 @@ export class WebRTCStats extends EventEmitter {
         data: {
           stream: this.getStreamDetails(stream),
           track: this.getMediaTrackDetails(track),
-          title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) { return 'stream:' + stream.id })
+          title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) {
+            return 'stream:' + stream.id
+          })
         }
       })
     })
@@ -504,10 +511,28 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
+  /**
+   * Sets the PeerConnection stats reporting interval.
+   * @param interval
+   *        Interval in milliseconds
+   */
+  public setStatsInterval (interval: number) {
+    this.getStatsInterval = interval
+    if (!this.getStatsInterval || !Number.isInteger(this.getStatsInterval)) {
+      throw new Error(`getStatsInterval should be an integer, got: ${interval}`)
+    }
+    // TODO to be tested
+    // Reset restart the interval with new value
+    if(this.monitoringSetInterval) {
+      window.clearInterval(this.monitoringSetInterval)
+      this.startMonitoring()
+    }
+  }
+
   // TODO
   private wrapGetDisplayMedia () {
     const self = this
-      // @ts-ignore
+    // @ts-ignore
     if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
       // @ts-ignore
       const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices)
