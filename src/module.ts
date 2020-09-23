@@ -81,24 +81,23 @@ export class WebRTCStats extends EventEmitter {
    * Start tracking a RTCPeerConnection
    * @param {Object} options The options object
    */
-  public addPeer (options: AddPeerOptions): Promise<void> {
-    return new Promise((resolve, reject) => {
+  public async addPeer (options: AddPeerOptions): Promise<void> {
       const {pc, peerId} = options
 
       if (!pc || !(pc instanceof RTCPeerConnection)) {
-        return reject(new Error(`Missing argument 'pc' or is not of instance RTCPeerConnection`))
+        throw new Error(`Missing argument 'pc' or is not of instance RTCPeerConnection`)
       }
 
       if (!peerId) {
-        return reject(new Error('Missing argument peerId'))
+        throw new Error('Missing argument peerId')
       }
 
       if (this.isEdge) {
-        return reject(new Error('Can\'t monitor peers in Edge at this time.'))
+        throw new Error('Can\'t monitor peers in Edge at this time.')
       }
 
       if (this.peersToMonitor[peerId]) {
-        return reject(new Error(`We are already monitoring peer with id ${peerId}.`))
+        throw new Error(`We are already monitoring peer with id ${peerId}.`)
       }
 
       const config = pc.getConfiguration()
@@ -121,9 +120,6 @@ export class WebRTCStats extends EventEmitter {
       })
 
       this.monitorPeer(peerId, pc)
-
-      resolve()
-    })
   }
 
   /**
