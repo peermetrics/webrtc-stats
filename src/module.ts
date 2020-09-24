@@ -192,7 +192,33 @@ export class WebRTCStats extends EventEmitter {
         this.monitoringSetInterval = 0
       }
 
-      for (const id in this.peersToMonitor) {
+      this.getStats()
+        .then((statsEvents: TimelineEvent[]) => {
+          statsEvents.forEach((statsEventObject: TimelineEvent) => {
+            // add it to the timeline and also emit the stats event
+            this.addCustomEvent('stats', statsEventObject)
+          })
+        })
+    }, this.getStatsInterval)
+  }
+
+  // TODO would the id of the peers be a string? id: string, because type isn't set in this.peersToMonitor[id]
+  private getStats (id: any = null): Promise<TimelineEvent[]> {
+
+    return new Promise(async (resolve, reject) => {
+      let peersToAnalyse: MonitoredPeersObject = {}
+
+      if (!id) {
+        peersToAnalyse = this.peersToMonitor
+      } else if (this.peersToMonitor[id]) {
+        peersToAnalyse[id] = this.peersToMonitor[id]
+      } else {
+        return reject(new Error(`Cannot get stats. Peer with id ${id} does not exist`))
+      }
+
+      let statsEventList: TimelineEvent[] = []
+
+      for (const id in peersToAnalyse) {
 
         const peerObject = this.peersToMonitor[id]
         const pc = peerObject.pc
@@ -206,43 +232,47 @@ export class WebRTCStats extends EventEmitter {
         try {
           const prom = pc.getStats(null)
           if (prom) {
-            prom.then((res) => {
-              // create an object from the RTCStats map
-              const statsObject = map2obj(res)
+            // TODO modify the promise to yield responses over time
+            const res = await prom
+            // create an object from the RTCStats map
+            const statsObject = map2obj(res)
 
-              const parsedStats = parseStats(res, peerObject.stats.parsed)
+            const parsedStats = parseStats(res, peerObject.stats.parsed)
 
-              const statsEventObject = {
-                event: 'stats',
-                tag: 'stats',
-                peerId: id,
-                data: parsedStats
-              } as TimelineEvent
+            const statsEventObject = {
+              event: 'stats',
+              tag: 'stats',
+              peerId: id,
+              data: parsedStats
+            } as TimelineEvent
 
-              if (this.rawStats === true) {
-                statsEventObject['rawStats'] = res
-              }
-              if (this.statsObject === true) {
-                statsEventObject['statsObject'] = statsObject
-              }
-              if (this.filteredStats === true) {
-                statsEventObject['filteredStats'] = this.filteroutStats(statsObject)
-              }
+            if (this.rawStats === true) {
+              statsEventObject['rawStats'] = res
+            }
+            if (this.statsObject === true) {
+              statsEventObject['statsObject'] = statsObject
+            }
+            if (this.filteredStats === true) {
+              statsEventObject['filteredStats'] = this.filteroutStats(statsObject)
+            }
 
-              // add it to the timeline and also emit the stats event
-              this.addCustomEvent('stats', statsEventObject)
+            statsEventList.push(statsEventObject)
 
-              peerObject.stats.parsed = parsedStats
-              // peerObject.stats.raw = res
-            }).catch((err) => {
-              console.error('error reading stats', err)
-            })
+            peerObject.stats.parsed = parsedStats
+            // peerObject.stats.raw = res
+
+          } else {
+            console.error(`PeerConnection from peer ${id} did not return any stats data`)
           }
         } catch (e) {
           this.debug(e)
         }
       }
-    }, this.getStatsInterval)
+
+      resolve(statsEventList)
+    })
+
+
   }
 
   private wrapGetUserMedia (): void {
@@ -523,7 +553,7 @@ export class WebRTCStats extends EventEmitter {
     }
     // TODO to be tested
     // Reset restart the interval with new value
-    if(this.monitoringSetInterval) {
+    if (this.monitoringSetInterval) {
       window.clearInterval(this.monitoringSetInterval)
       this.startMonitoring()
     }
