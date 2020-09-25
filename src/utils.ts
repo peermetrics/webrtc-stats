@@ -93,24 +93,25 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
     connection: {
       inbound: {},
       outbound: {},
-      other: {}
     }
   } as StatsObject
-
+  console.log('stats', stats)
   for (const report of stats.values()) {
+    console.log(report)
     switch (report.type) {
       case 'outbound-rtp': {
         const mediaType = report.mediaType || report.kind
-        let local = {}
+        let outbound = {}
         const codecInfo = {} as CodecInfo
         if (!['audio', 'video'].includes(mediaType)) continue
 
-        statsObject[mediaType].local = report
+        // TODO why set here if it's set at the end?
+        // statsObject[mediaType].outbound[report.id] = report
 
         if (report.remoteId) {
-          local = stats.get(report.remoteId)
+          outbound = stats.get(report.remoteId)
         } else if (report.trackId) {
-          local = stats.get(report.trackId)
+          outbound = stats.get(report.trackId)
         }
 
         if (report.codecId) {
@@ -122,12 +123,12 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
           }
         }
 
-        statsObject[mediaType].local = { ...report, ...local, ...codecInfo }
+        statsObject[mediaType].outbound[report.id] = { ...report, ...outbound, ...codecInfo }
         break
       }
       case 'inbound-rtp': {
         let mediaType = report.mediaType || report.kind
-        let remote = {}
+        let inbound = {}
         const codecInfo = {} as CodecInfo
 
         // Safari is missing mediaType and kind for 'inbound-rtp'
@@ -136,13 +137,13 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
           else if (report.id.includes('Audio')) mediaType = 'audio'
           else continue
         }
-
-        statsObject[mediaType].remote = report
+        // TODO any reason to leave this here?
+        // statsObject[mediaType].remote = report
 
         if (report.remoteId) {
-          remote = stats.get(report.remoteId)
+          inbound = stats.get(report.remoteId)
         } else if (report.trackId) {
-          remote = stats.get(report.trackId)
+          inbound = stats.get(report.trackId)
         }
 
         if (report.codecId) {
@@ -165,7 +166,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
           }
         }
 
-        statsObject[mediaType].remote = { ...report, ...remote, ...codecInfo }
+        statsObject[mediaType].inbound[report.id] = { ...report, ...inbound, ...codecInfo }
         break
       }
       case 'peer-connection': {
