@@ -1,4 +1,4 @@
-import { StatsObject, CodecInfo } from './types/index'
+import {StatsObject, CodecInfo} from './types/index'
 
 /**
  * A set of methods used to parse the rtc stats
@@ -9,18 +9,26 @@ function addAdditionalData (currentStats, previousStats) {
   if (!previousStats) return currentStats
 
   // audio
-  currentStats.audio.local.bitrate = computeBitrate(currentStats.audio.local, previousStats.audio.local, 'bytesSent')
-  currentStats.audio.local.packetRate = computeRate(currentStats.audio.local, previousStats.audio.local, 'packetsSent')
+  for (const id in currentStats.audio.outbound) {
+    currentStats.audio.outbound[id].bitrate = computeBitrate(currentStats.audio.outbound[id], previousStats.audio.outbound[id], 'bytesSent')
+    currentStats.audio.outbound[id].packetRate = computeRate(currentStats.audio.outbound[id], previousStats.audio.outbound[id], 'packetsSent')
+  }
 
-  currentStats.audio.remote.bitrate = computeBitrate(currentStats.audio.remote, previousStats.audio.remote, 'bytesReceived')
-  currentStats.audio.remote.packetRate = computeRate(currentStats.audio.remote, previousStats.audio.remote, 'packetsReceived')
+  for (const id in currentStats.audio.inbound) {
+    currentStats.audio.inbound[id].bitrate = computeBitrate(currentStats.audio.inbound[id], previousStats.audio.inbound[id], 'bytesReceived')
+    currentStats.audio.inbound[id].packetRate = computeRate(currentStats.audio.inbound[id], previousStats.audio.inbound[id], 'packetsReceived')
+  }
 
   // video
-  currentStats.video.local.bitrate = computeBitrate(currentStats.video.local, previousStats.video.local, 'bytesSent')
-  currentStats.video.local.packetRate = computeRate(currentStats.video.local, previousStats.video.local, 'packetsSent')
+  for (const id in currentStats.video.outbound) {
+    currentStats.video.outbound[id].bitrate = computeBitrate(currentStats.video.outbound[id], previousStats.video.outbound[id], 'bytesSent')
+    currentStats.video.outbound[id].packetRate = computeRate(currentStats.video.outbound[id], previousStats.video.outbound[id], 'packetsSent')
+  }
 
-  currentStats.video.remote.bitrate = computeBitrate(currentStats.video.remote, previousStats.video.remote, 'bytesReceived')
-  currentStats.video.remote.packetRate = computeRate(currentStats.video.remote, previousStats.video.remote, 'packetsReceived')
+  for (const id in currentStats.video.inbound) {
+    currentStats.video.inbound[id].bitrate = computeBitrate(currentStats.video.inbound[id], previousStats.video.inbound[id], 'bytesReceived')
+    currentStats.video.inbound[id].packetRate = computeRate(currentStats.video.inbound[id], previousStats.video.inbound[id], 'packetsReceived')
+  }
 
   return currentStats
 }
@@ -28,16 +36,16 @@ function addAdditionalData (currentStats, previousStats) {
 function getCandidatePairInfo (candidatePair, stats) {
   if (!candidatePair || !stats) return {}
 
-  const connection = { ...candidatePair }
+  const connection = {...candidatePair}
 
   if (connection.localCandidateId) {
     const localCandidate = stats.get(connection.localCandidateId)
-    connection.local = { ...localCandidate }
+    connection.local = {...localCandidate}
   }
 
   if (connection.remoteCandidateId) {
     const remoteCandidate = stats.get(connection.remoteCandidateId)
-    connection.remote = { ...remoteCandidate }
+    connection.remote = {...remoteCandidate}
   }
 
   return connection
@@ -93,11 +101,20 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
     connection: {
       inbound: {},
       outbound: {},
+    },
+    remote: {     // TODO dynamically add later???
+      audio:{
+        inbound:{},
+        outbound: {}
+      },
+      video:{
+        inbound: {},
+        outbound: {}
+      }
     }
   } as StatsObject
-  console.log('stats', stats)
   for (const report of stats.values()) {
-    console.log(report)
+    // TODO remove duplicate code remote vs local rtp. Only the place where we save is different.
     switch (report.type) {
       case 'outbound-rtp': {
         const mediaType = report.mediaType || report.kind
@@ -123,7 +140,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
           }
         }
 
-        statsObject[mediaType].outbound[report.id] = { ...report, ...outbound, ...codecInfo }
+        statsObject[mediaType].outbound[report.id] = {...report, ...outbound, ...codecInfo}
         break
       }
       case 'inbound-rtp': {
@@ -166,12 +183,82 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
           }
         }
 
-        statsObject[mediaType].inbound[report.id] = { ...report, ...inbound, ...codecInfo }
+        statsObject[mediaType].inbound[report.id] = {...report, ...inbound, ...codecInfo}
         break
       }
       case 'peer-connection': {
         statsObject.connection.dataChannelsClosed = report.dataChannelsClosed
         statsObject.connection.dataChannelsOpened = report.dataChannelsOpened
+        break
+      }
+      case 'remote-inbound-rtp': {
+        let mediaType = report.mediaType || report.kind
+        let inbound = {}
+        const codecInfo = {} as CodecInfo
+
+        // Safari is missing mediaType and kind for 'inbound-rtp'
+        if (!['audio', 'video'].includes(mediaType)) {
+          if (report.id.includes('Video')) mediaType = 'video'
+          else if (report.id.includes('Audio')) mediaType = 'audio'
+          else continue
+        }
+        // TODO any reason to leave this here?
+        // statsObject[mediaType].remote = report
+
+        if (report.remoteId) {
+          inbound = stats.get(report.remoteId)
+        } else if (report.trackId) {
+          inbound = stats.get(report.trackId)
+        }
+
+        if (report.codecId) {
+          const codec = stats.get(report.codecId)
+          if (codec) {
+            codecInfo.clockRate = codec.clockRate
+            codecInfo.mimeType = codec.mimeType
+            codecInfo.payloadType = codec.payloadType
+          }
+        }
+
+        // if we don't have connection details already saved
+        // and the transportId is present (most likely chrome)
+        // get the details from the candidate-pair
+        if (!statsObject.connection.id && report.transportId) {
+          const transport = stats.get(report.transportId)
+          if (transport && transport.selectedCandidatePairId) {
+            const candidatePair = stats.get(transport.selectedCandidatePairId)
+            statsObject.connection = getCandidatePairInfo(candidatePair, stats)
+          }
+        }
+
+        statsObject.remote[mediaType].inbound[report.id] = {...report, ...inbound, ...codecInfo}
+        break
+      }
+      case 'remote-outbound-rtp': {
+        const mediaType = report.mediaType || report.kind
+        let outbound = {}
+        const codecInfo = {} as CodecInfo
+        if (!['audio', 'video'].includes(mediaType)) continue
+
+        // TODO why set here if it's set at the end?
+        // statsObject[mediaType].outbound[report.id] = report
+
+        if (report.remoteId) {
+          outbound = stats.get(report.remoteId)
+        } else if (report.trackId) {
+          outbound = stats.get(report.trackId)
+        }
+
+        if (report.codecId) {
+          const codec = stats.get(report.codecId)
+          if (codec) {
+            codecInfo.clockRate = codec.clockRate
+            codecInfo.mimeType = codec.mimeType
+            codecInfo.payloadType = codec.payloadType
+          }
+        }
+
+        statsObject.remote[mediaType].outbound[report.id] = {...report, ...outbound, ...codecInfo}
         break
       }
       default:

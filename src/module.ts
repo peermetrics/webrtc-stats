@@ -4,7 +4,7 @@ import {
   AddPeerOptions,
   MonitoredPeersObject,
   TimelineEvent,
-  GetUserMediaResponse
+  GetUserMediaResponse, MonitorPeerOptions
 } from './types/index'
 
 import {parseStats, map2obj} from './utils'
@@ -20,6 +20,7 @@ export class WebRTCStats extends EventEmitter {
   private filteredStats: boolean
   private shouldWrapGetUserMedia: boolean
   private debug: any
+  private remote: boolean
   private peersToMonitor: MonitoredPeersObject = {}
 
   /**
@@ -73,8 +74,9 @@ export class WebRTCStats extends EventEmitter {
      * If we want to enable debug
      * @return {Function}
      */
-    this.debug = options.debug ? debug : function () {
-    }
+    this.debug = options.debug ? debug : () => {}
+
+    this.remote = !!options.remote
 
     // add event listeners for getUserMedia
     if (this.shouldWrapGetUserMedia) {
@@ -88,6 +90,9 @@ export class WebRTCStats extends EventEmitter {
    */
   public async addPeer (options: AddPeerOptions): Promise<void> {
     const {pc, peerId} = options
+    let {remote} = options
+
+    remote = typeof remote === 'boolean'?remote:this.remote
 
     if (!pc || !(pc instanceof RTCPeerConnection)) {
       throw new Error(`Missing argument 'pc' or is not of instance RTCPeerConnection`)
@@ -124,7 +129,7 @@ export class WebRTCStats extends EventEmitter {
       }
     })
 
-    this.monitorPeer(peerId, pc)
+    this.monitorPeer(peerId, pc, {remote})
   }
 
   /**
@@ -148,9 +153,12 @@ export class WebRTCStats extends EventEmitter {
 
   /**
    * Used to add to the list of peers to get stats for
+   * @param  {string} peerId
    * @param  {RTCPeerConnection} pc
+   * @param {MonitorPeerOptions} options
    */
-  private monitorPeer (peerId: string, pc: RTCPeerConnection): void {
+  private monitorPeer (peerId: string, pc: RTCPeerConnection, options: MonitorPeerOptions): void {
+
     if (!pc) return
 
     // keep this in an object to avoid duplicates
@@ -161,7 +169,8 @@ export class WebRTCStats extends EventEmitter {
         // keep a reference of the current stat
         parsed: null,
         raw: null
-      }
+      },
+      options
     }
 
     this.addPeerConnectionEventListeners(peerId, pc)
@@ -192,7 +201,7 @@ export class WebRTCStats extends EventEmitter {
         this.monitoringSetInterval = 0
       }
 
-      this.getStats()
+      this.getStats() // get stats from all peer connections
         .then((statsEvents: TimelineEvent[]) => {
           statsEvents.forEach((statsEventObject: TimelineEvent) => {
             // add it to the timeline and also emit the stats event
@@ -202,8 +211,7 @@ export class WebRTCStats extends EventEmitter {
     }, this.getStatsInterval)
   }
 
-  // TODO would the id of the peers be a string? id: string, because type isn't set in this.peersToMonitor[id]
-  private getStats (id: any = null): Promise<TimelineEvent[]> {
+  private getStats (id: string = null): Promise<TimelineEvent[]> {
 
     return new Promise(async (resolve, reject) => {
       let peersToAnalyse: MonitoredPeersObject = {}
@@ -237,6 +245,7 @@ export class WebRTCStats extends EventEmitter {
             // create an object from the RTCStats map
             const statsObject = map2obj(res)
 
+            // TODO PASS remote option to parseStats
             const parsedStats = parseStats(res, peerObject.stats.parsed)
 
             const statsEventObject = {

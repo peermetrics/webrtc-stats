@@ -10,6 +10,7 @@ export interface WebRTCStatsConstructorOptions {
     wrapLegacyGetUserMedia: boolean
     prefixesToWrap: string[]
     debug: boolean
+    remote: boolean
 }
 
 export type TimelineTag = 'getUserMedia' | 'peer' | 'connection' | 'track' | 'datachannel' | 'stats'
@@ -30,6 +31,7 @@ export interface TimelineEvent {
 export interface AddPeerOptions {
     pc: RTCPeerConnection
     peerId: string
+    remote?: boolean
 }
 
 export interface GetUserMediaResponse {
@@ -42,6 +44,7 @@ export interface MonitoredPeer {
     pc: RTCPeerConnection
     stream: MediaStream | null
     stats: any
+    options: MonitorPeerOptions
 }
 
 export interface MonitoredPeersObject {
@@ -55,6 +58,10 @@ interface StatsObjectDetails {
 export interface StatsObject {
     audio: StatsObjectDetails
     video: StatsObjectDetails
+    remote: {
+        audio: StatsObjectDetails
+        video: StatsObjectDetails
+    }
     connection: any
 }
 
@@ -62,4 +69,8 @@ export interface CodecInfo {
     clockRate: number
     mimeType: number
     payloadType: number
+}
+
+export interface MonitorPeerOptions {
+    remote: boolean
 }
