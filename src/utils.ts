@@ -83,16 +83,17 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
    */
   let statsObject = {
     audio: {
-      local: {},
-      remote: {}
+      inbound: {},
+      outbound: {}
     },
     video: {
-      local: {},
-      remote: {}
+      inbound: {},
+      outbound: {}
     },
     connection: {
-      local: {},
-      remote: {}
+      inbound: {},
+      outbound: {},
+      other: {}
     }
   } as StatsObject
 

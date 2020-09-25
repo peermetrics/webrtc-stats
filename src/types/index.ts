@@ -49,8 +49,8 @@ export interface MonitoredPeersObject {
 }
 
 interface StatsObjectDetails {
-    local: any
-    remote: any
+    inbound: any
+    outbound: any
 }
 export interface StatsObject {
     audio: StatsObjectDetails
