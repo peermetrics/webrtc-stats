@@ -74,3 +74,7 @@ export interface CodecInfo {
 export interface MonitorPeerOptions {
     remote: boolean
 }
+
+export interface ParseStatsOptions {
+    remote?: boolean
+}

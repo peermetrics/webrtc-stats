@@ -1,4 +1,4 @@
-import {StatsObject, CodecInfo} from './types/index'
+import {StatsObject, CodecInfo, ParseStatsOptions} from './types/index'
 
 /**
  * A set of methods used to parse the rtc stats
@@ -79,11 +79,13 @@ export function map2obj (stats: any) {
 }
 
 // Enumerates the new standard compliant stats using local and remote track ids.
-export function parseStats (stats: any, previousStats: StatsObject | null): StatsObject {
+export function parseStats (stats: any, previousStats: StatsObject | null, opts?: ParseStatsOptions | null): StatsObject {
   // Create an object structure with all the needed stats and types that we care
   // about. This allows to map the getStats stats to other stats names.
 
   if (!stats) return null
+
+  const options = opts?opts:{}
 
   /**
    * The starting object where we will save the details from the stats report
@@ -192,6 +194,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
         break
       }
       case 'remote-inbound-rtp': {
+        if(!options.remote) break
         let mediaType = report.mediaType || report.kind
         let inbound = {}
         const codecInfo = {} as CodecInfo
@@ -235,6 +238,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null): Stat
         break
       }
       case 'remote-outbound-rtp': {
+        if(!options.remote) break
         const mediaType = report.mediaType || report.kind
         let outbound = {}
         const codecInfo = {} as CodecInfo

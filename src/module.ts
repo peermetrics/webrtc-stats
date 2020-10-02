@@ -4,7 +4,7 @@ import {
   AddPeerOptions,
   MonitoredPeersObject,
   TimelineEvent,
-  GetUserMediaResponse, MonitorPeerOptions
+  GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions
 } from './types/index'
 
 import {parseStats, map2obj} from './utils'
@@ -77,6 +77,8 @@ export class WebRTCStats extends EventEmitter {
     this.debug = options.debug ? debug : () => {}
 
     this.remote = !!options.remote
+
+    console.log('remote options', this.remote, options.remote)
 
     // add event listeners for getUserMedia
     if (this.shouldWrapGetUserMedia) {
@@ -245,8 +247,9 @@ export class WebRTCStats extends EventEmitter {
             // create an object from the RTCStats map
             const statsObject = map2obj(res)
 
-            // TODO PASS remote option to parseStats
-            const parsedStats = parseStats(res, peerObject.stats.parsed)
+
+            const parseStatsOptions: ParseStatsOptions = { remote: peerObject.options.remote }
+            const parsedStats = parseStats(res, peerObject.stats.parsed, parseStatsOptions)
 
             const statsEventObject = {
               event: 'stats',
