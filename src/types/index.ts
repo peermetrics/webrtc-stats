@@ -58,7 +58,7 @@ interface StatsObjectDetails {
 export interface StatsObject {
     audio: StatsObjectDetails
     video: StatsObjectDetails
-    remote: {
+    remote?: {
         audio: StatsObjectDetails
         video: StatsObjectDetails
     }

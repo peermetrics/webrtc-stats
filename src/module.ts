@@ -78,8 +78,6 @@ export class WebRTCStats extends EventEmitter {
 
     this.remote = !!options.remote
 
-    console.log('remote options', this.remote, options.remote)
-
     // add event listeners for getUserMedia
     if (this.shouldWrapGetUserMedia) {
       this.wrapGetUserMedia()
@@ -353,8 +351,8 @@ export class WebRTCStats extends EventEmitter {
         tag: 'track',
         peerId: id,
         data: {
-          stream: this.getStreamDetails(stream),
-          track: this.getMediaTrackDetails(track),
+          stream: stream?this.getStreamDetails(stream):null,
+          track: track?this.getMediaTrackDetails(track):null,
           title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) {
             return 'stream:' + stream.id
           })
@@ -567,6 +565,7 @@ export class WebRTCStats extends EventEmitter {
     // Reset restart the interval with new value
     if (this.monitoringSetInterval) {
       window.clearInterval(this.monitoringSetInterval)
+      this.monitoringSetInterval = 0
       this.startMonitoring()
     }
   }
