@@ -196,9 +196,7 @@ export class WebRTCStats extends EventEmitter {
     this.monitoringSetInterval = window.setInterval(() => {
       // if we ran out of peers to monitor
       if (!Object.keys(this.peersToMonitor).length) {
-        window.clearInterval(this.monitoringSetInterval)
-
-        this.monitoringSetInterval = 0
+        this.stopMonitoring()
       }
 
       this.getStats() // get stats from all peer connections
@@ -209,6 +207,13 @@ export class WebRTCStats extends EventEmitter {
           })
         })
     }, this.getStatsInterval)
+  }
+
+  private stopMonitoring() {
+    if (this.monitoringSetInterval) {
+      window.clearInterval(this.monitoringSetInterval)
+      this.monitoringSetInterval = 0
+    }
   }
 
   private getStats (id: string = null): Promise<TimelineEvent[]> {
@@ -564,8 +569,7 @@ export class WebRTCStats extends EventEmitter {
     // TODO to be tested
     // Reset restart the interval with new value
     if (this.monitoringSetInterval) {
-      window.clearInterval(this.monitoringSetInterval)
-      this.monitoringSetInterval = 0
+      this.stopMonitoring()
       this.startMonitoring()
     }
   }
