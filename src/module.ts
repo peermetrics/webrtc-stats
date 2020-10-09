@@ -4,24 +4,25 @@ import {
   AddPeerOptions,
   MonitoredPeersObject,
   TimelineEvent,
-  GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions
+  GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions, LogLevel
 } from './types/index'
 
 import {parseStats, map2obj} from './utils'
 
-const debug = console.log.bind(console.log)
+
 
 export class WebRTCStats extends EventEmitter {
-  private isEdge: boolean
+  private readonly isEdge: boolean
   private getStatsInterval: number
   private monitoringSetInterval: number = 0
-  private rawStats: boolean
-  private statsObject: boolean
-  private filteredStats: boolean
-  private shouldWrapGetUserMedia: boolean
+  private readonly rawStats: boolean
+  private readonly statsObject: boolean
+  private readonly filteredStats: boolean
+  private readonly shouldWrapGetUserMedia: boolean
   private debug: any
-  private remote: boolean
+  private readonly remote: boolean
   private peersToMonitor: MonitoredPeersObject = {}
+  private logLevel: LogLevel
 
   /**
    * Used to keep track of all the events
@@ -74,9 +75,11 @@ export class WebRTCStats extends EventEmitter {
      * If we want to enable debug
      * @return {Function}
      */
-    this.debug = options.debug ? debug : () => {}
+    this.debug = !!options.debug
 
     this.remote = !!options.remote
+
+    this.logLevel = options.logLevel || "warn"
 
     // add event listeners for getUserMedia
     if (this.shouldWrapGetUserMedia) {
@@ -92,7 +95,7 @@ export class WebRTCStats extends EventEmitter {
     const {pc, peerId} = options
     let {remote} = options
 
-    remote = typeof remote === 'boolean'?remote:this.remote
+    remote = typeof remote === 'boolean' ? remote : this.remote
 
     if (!pc || !(pc instanceof RTCPeerConnection)) {
       throw new Error(`Missing argument 'pc' or is not of instance RTCPeerConnection`)
@@ -209,7 +212,7 @@ export class WebRTCStats extends EventEmitter {
     }, this.getStatsInterval)
   }
 
-  private stopMonitoring() {
+  private stopMonitoring () {
     if (this.monitoringSetInterval) {
       window.clearInterval(this.monitoringSetInterval)
       this.monitoringSetInterval = 0
@@ -219,6 +222,7 @@ export class WebRTCStats extends EventEmitter {
   private getStats (id: string = null): Promise<TimelineEvent[]> {
 
     return new Promise(async (resolve, reject) => {
+      this.logger.info(id?`Getting stats from peer ${id}`:`Getting stats from all peers`)
       let peersToAnalyse: MonitoredPeersObject = {}
 
       if (!id) {
@@ -251,7 +255,7 @@ export class WebRTCStats extends EventEmitter {
             const statsObject = map2obj(res)
 
 
-            const parseStatsOptions: ParseStatsOptions = { remote: peerObject.options.remote }
+            const parseStatsOptions: ParseStatsOptions = {remote: peerObject.options.remote}
             const parsedStats = parseStats(res, peerObject.stats.parsed, parseStatsOptions)
 
             const statsEventObject = {
@@ -277,10 +281,10 @@ export class WebRTCStats extends EventEmitter {
             // peerObject.stats.raw = res
 
           } else {
-            console.error(`PeerConnection from peer ${id} did not return any stats data`)
+            this.logger.error(`PeerConnection from peer ${id} did not return any stats data`)
           }
         } catch (e) {
-          this.debug(e)
+          this.logger.error(e)
         }
       }
 
@@ -291,7 +295,12 @@ export class WebRTCStats extends EventEmitter {
   }
 
   private wrapGetUserMedia (): void {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      this.logger.warn(`'navigator.mediaDevices.getUserMedia' is not available in browser. Will not wrap getUserMedia.`)
+      return
+    }
+
+    this.logger.info('Wrapping getUsermedia functions.')
 
     const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
 
@@ -334,6 +343,9 @@ export class WebRTCStats extends EventEmitter {
   private addPeerConnectionEventListeners (peerId: string, pc: RTCPeerConnection): void {
     const id = peerId
 
+    this.logger.info(`Adding new peer with ID ${peerId}.`)
+    this.logger.debug(`Newly added PeerConnection`, pc)
+
     pc.addEventListener('icecandidate', (e) => {
       this.addToTimeline({
         event: 'onicecandidate',
@@ -356,8 +368,8 @@ export class WebRTCStats extends EventEmitter {
         tag: 'track',
         peerId: id,
         data: {
-          stream: stream?this.getStreamDetails(stream):null,
-          track: track?this.getMediaTrackDetails(track):null,
+          stream: stream ? this.getStreamDetails(stream) : null,
+          track: track ? this.getMediaTrackDetails(track) : null,
           title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) {
             return 'stream:' + stream.id
           })
@@ -399,6 +411,7 @@ export class WebRTCStats extends EventEmitter {
         }
       })
     })
+
     pc.addEventListener('connectionstatechange', () => {
       this.addToTimeline({
         event: 'onconnectionstatechange',
@@ -571,6 +584,32 @@ export class WebRTCStats extends EventEmitter {
     if (this.monitoringSetInterval) {
       this.stopMonitoring()
       this.startMonitoring()
+    }
+  }
+
+  public get logger() {
+    const canLog = (requestLevel: LogLevel) => {
+      const allLevels: LogLevel[] = ['quiet', 'error', 'warn', 'info', 'debug']
+      return allLevels.slice(0, allLevels.indexOf(this.logLevel) + 1).indexOf(requestLevel)>-1;
+    }
+
+    return {
+      error (...msg) {
+        if (this.debug && canLog('error'))
+          console.error(`[webrtc-stats][error] `, ...msg)
+      },
+      warn (...msg) {
+        if (this.debug && canLog('warn'))
+          console.warn(`[webrtc-stats][warn] `, ...msg)
+      },
+      info (...msg) {
+        if (this.debug && canLog('info'))
+          console.log(`[webrtc-stats][info] `, ...msg)
+      },
+      debug (...msg) {
+        if (this.debug && canLog('debug'))
+          console.debug(`[webrtc-stats][debug] `,...msg)
+      }
     }
   }
 
