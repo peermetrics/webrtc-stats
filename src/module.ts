@@ -290,8 +290,6 @@ export class WebRTCStats extends EventEmitter {
 
       resolve(statsEventList)
     })
-
-
   }
 
   private wrapGetUserMedia (): void {
@@ -347,6 +345,8 @@ export class WebRTCStats extends EventEmitter {
     this.logger.debug(`Newly added PeerConnection`, pc)
 
     pc.addEventListener('icecandidate', (e) => {
+      this.logger.debug('[pc-event] icecandidate | peerId: ${peerId}', e)
+
       this.addToTimeline({
         event: 'onicecandidate',
         tag: 'connection',
@@ -356,6 +356,8 @@ export class WebRTCStats extends EventEmitter {
     })
 
     pc.addEventListener('track', (e) => {
+      this.logger.debug(`[pc-event] track | peerId: ${peerId}`, e)
+
       const track = e.track
       const stream = e.streams[0]
 
@@ -378,6 +380,8 @@ export class WebRTCStats extends EventEmitter {
     })
 
     pc.addEventListener('signalingstatechange', () => {
+      this.logger.debug(`[pc-event] signalingstatechange | peerId: ${peerId}`)
+
       this.addToTimeline({
         event: 'onsignalingstatechange',
         tag: 'connection',
@@ -386,6 +390,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     pc.addEventListener('iceconnectionstatechange', () => {
+      this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${peerId}`)
       this.addToTimeline({
         event: 'oniceconnectionstatechange',
         tag: 'connection',
@@ -394,6 +399,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     pc.addEventListener('icegatheringstatechange', () => {
+      this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${peerId}`)
       this.addToTimeline({
         event: 'onicegatheringstatechange',
         tag: 'connection',
@@ -402,6 +408,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     pc.addEventListener('icecandidateerror', (ev) => {
+      this.logger.debug(`[pc-event] icecandidateerror | peerId: ${peerId}`)
       this.addToTimeline({
         event: 'onicecandidateerror',
         tag: 'connection',
@@ -413,6 +420,7 @@ export class WebRTCStats extends EventEmitter {
     })
 
     pc.addEventListener('connectionstatechange', () => {
+      this.logger.debug(`[pc-event] connectionstatechange | peerId: ${peerId}`)
       this.addToTimeline({
         event: 'onconnectionstatechange',
         tag: 'connection',
@@ -421,6 +429,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     pc.addEventListener('negotiationneeded', () => {
+      this.logger.debug(`[pc-event] negotiationneeded | peerId: ${peerId}`)
       this.addToTimeline({
         event: 'onnegotiationneeded',
         tag: 'connection',
@@ -428,6 +437,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     pc.addEventListener('datachannel', (event) => {
+      this.logger.debug(`[pc-event] datachannel | peerId: ${peerId}`, event)
       this.addToTimeline({
         event: 'ondatachannel',
         tag: 'datachannel',
