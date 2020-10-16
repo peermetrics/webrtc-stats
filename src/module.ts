@@ -10,7 +10,6 @@ import {
 import {parseStats, map2obj} from './utils'
 
 
-
 export class WebRTCStats extends EventEmitter {
   private readonly isEdge: boolean
   private getStatsInterval: number
@@ -222,7 +221,7 @@ export class WebRTCStats extends EventEmitter {
   private getStats (id: string = null): Promise<TimelineEvent[]> {
 
     return new Promise(async (resolve, reject) => {
-      this.logger.info(id?`Getting stats from peer ${id}`:`Getting stats from all peers`)
+      this.logger.info(id ? `Getting stats from peer ${id}` : `Getting stats from all peers`)
       let peersToAnalyse: MonitoredPeersObject = {}
 
       if (!id) {
@@ -321,6 +320,7 @@ export class WebRTCStats extends EventEmitter {
     navigator.mediaDevices.getUserMedia = gum.bind(navigator.mediaDevices)
   }
 
+
   /**
    * Filter out some stats, mainly codec and certificate
    * @param  {Object} stats The parsed rtc stats object
@@ -338,113 +338,132 @@ export class WebRTCStats extends EventEmitter {
     return fullObject
   }
 
+  private get peerConnectionListeners () {
+    return {
+      icecandidate: (id, pc, e) => {
+        this.logger.debug('[pc-event] icecandidate | peerId: ${peerId}', e)
+
+        this.addToTimeline({
+          event: 'onicecandidate',
+          tag: 'connection',
+          peerId: id,
+          data: e.candidate
+        })
+      },
+      track: (id, pc, e) => {
+        this.logger.debug(`[pc-event] track | peerId: ${id}`, e)
+
+        const track = e.track
+        const stream = e.streams[0]
+
+        // save the remote stream
+        this.peersToMonitor[id].stream = stream
+
+        this.addTrackEventListeners(track)
+        this.addCustomEvent('track', {
+          event: 'ontrack',
+          tag: 'track',
+          peerId: id,
+          data: {
+            stream: stream ? this.getStreamDetails(stream) : null,
+            track: track ? this.getMediaTrackDetails(track) : null,
+            title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) {
+              return 'stream:' + stream.id
+            })
+          }
+        })
+      },
+      signalingstatechange: (id, pc) => {
+        this.logger.debug(`[pc-event] signalingstatechange | peerId: ${peerId}`)
+        this.addToTimeline({
+          event: 'onsignalingstatechange',
+          tag: 'connection',
+          peerId: id,
+          data: pc.signalingState
+        })
+      },
+      iceconnectionstatechange: (id, pc) => {
+        this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${peerId}`)
+        this.addToTimeline({
+          event: 'oniceconnectionstatechange',
+          tag: 'connection',
+          peerId: id,
+          data: pc.iceConnectionState
+        })
+      },
+      icegatheringstatechange: (id, pc) => {
+        this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${peerId}`)
+        this.addToTimeline({
+          event: 'onicegatheringstatechange',
+          tag: 'connection',
+          peerId: id,
+          data: pc.iceGatheringState
+        })
+      },
+      icecandidateerror: (id, pc, ev) => {
+        this.logger.debug(`[pc-event] icecandidateerror | peerId: ${peerId}`)
+        this.addToTimeline({
+          event: 'onicecandidateerror',
+          tag: 'connection',
+          peerId: id,
+          error: {
+            errorCode: ev.errorCode
+          }
+        })
+      },
+      connectionstatechange: (id, pc) => {
+        this.logger.debug(`[pc-event] connectionstatechange | peerId: ${peerId}`)
+        this.addToTimeline({
+          event: 'onconnectionstatechange',
+          tag: 'connection',
+          peerId: id,
+          data: pc.connectionState
+        })
+        if('closed' === pc.connectionState)
+          this.removePeer(id)
+      },
+      negotiationneeded: (id, pc) => {
+        this.logger.debug(`[pc-event] negotiationneeded | peerId: ${peerId}`)
+        this.addToTimeline({
+          event: 'onnegotiationneeded',
+          tag: 'connection',
+          peerId: id
+        })
+      },
+      datachannel: (id, pc, event) => {
+        this.logger.debug(`[pc-event] datachannel | peerId: ${peerId}`, event)
+        this.addToTimeline({
+          event: 'ondatachannel',
+          tag: 'datachannel',
+          peerId: id,
+          data: event.channel
+        })
+      }
+    }
+  }
+
   private addPeerConnectionEventListeners (peerId: string, pc: RTCPeerConnection): void {
     const id = peerId
 
     this.logger.info(`Adding new peer with ID ${peerId}.`)
     this.logger.debug(`Newly added PeerConnection`, pc)
 
-    pc.addEventListener('icecandidate', (e) => {
-      this.logger.debug('[pc-event] icecandidate | peerId: ${peerId}', e)
-
-      this.addToTimeline({
-        event: 'onicecandidate',
-        tag: 'connection',
-        peerId: id,
-        data: e.candidate
-      })
+    Object.keys(this.peerConnectionListeners).forEach(eventName => {
+      pc.addEventListener(eventName, this.peerConnectionListeners[eventName].bind(this, id, pc), false)
     })
 
-    pc.addEventListener('track', (e) => {
-      this.logger.debug(`[pc-event] track | peerId: ${peerId}`, e)
+    /*pc.addEventListener('icecandidate', this.peerConnectionListeners.icecandidate.bind(this, id, pc))
 
-      const track = e.track
-      const stream = e.streams[0]
+    pc.addEventListener('track', this.peerConnectionListeners.track)
 
-      // save the remote stream
-      this.peersToMonitor[id].stream = stream
+    pc.addEventListener('signalingstatechange', this.peerConnectionListeners.signalingstatechange)
+    pc.addEventListener('iceconnectionstatechange', this.peerConnectionListeners.iceconnectionstatechange)
+    pc.addEventListener('icegatheringstatechange', this.peerConnectionListeners.icegatheringstatechange)
+    pc.addEventListener('icecandidateerror', this.peerConnectionListeners.icecandidateerror)
 
-      this.addTrackEventListeners(track)
-      this.addCustomEvent('track', {
-        event: 'ontrack',
-        tag: 'track',
-        peerId: id,
-        data: {
-          stream: stream ? this.getStreamDetails(stream) : null,
-          track: track ? this.getMediaTrackDetails(track) : null,
-          title: e.track.kind + ':' + e.track.id + ' ' + e.streams.map(function (stream) {
-            return 'stream:' + stream.id
-          })
-        }
-      })
-    })
-
-    pc.addEventListener('signalingstatechange', () => {
-      this.logger.debug(`[pc-event] signalingstatechange | peerId: ${peerId}`)
-
-      this.addToTimeline({
-        event: 'onsignalingstatechange',
-        tag: 'connection',
-        peerId: id,
-        data: pc.signalingState
-      })
-    })
-    pc.addEventListener('iceconnectionstatechange', () => {
-      this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${peerId}`)
-      this.addToTimeline({
-        event: 'oniceconnectionstatechange',
-        tag: 'connection',
-        peerId: id,
-        data: pc.iceConnectionState
-      })
-    })
-    pc.addEventListener('icegatheringstatechange', () => {
-      this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${peerId}`)
-      this.addToTimeline({
-        event: 'onicegatheringstatechange',
-        tag: 'connection',
-        peerId: id,
-        data: pc.iceGatheringState
-      })
-    })
-    pc.addEventListener('icecandidateerror', (ev) => {
-      this.logger.debug(`[pc-event] icecandidateerror | peerId: ${peerId}`)
-      this.addToTimeline({
-        event: 'onicecandidateerror',
-        tag: 'connection',
-        peerId: id,
-        error: {
-          errorCode: ev.errorCode
-        }
-      })
-    })
-
-    pc.addEventListener('connectionstatechange', () => {
-      this.logger.debug(`[pc-event] connectionstatechange | peerId: ${peerId}`)
-      this.addToTimeline({
-        event: 'onconnectionstatechange',
-        tag: 'connection',
-        peerId: id,
-        data: pc.connectionState
-      })
-    })
-    pc.addEventListener('negotiationneeded', () => {
-      this.logger.debug(`[pc-event] negotiationneeded | peerId: ${peerId}`)
-      this.addToTimeline({
-        event: 'onnegotiationneeded',
-        tag: 'connection',
-        peerId: id
-      })
-    })
-    pc.addEventListener('datachannel', (event) => {
-      this.logger.debug(`[pc-event] datachannel | peerId: ${peerId}`, event)
-      this.addToTimeline({
-        event: 'ondatachannel',
-        tag: 'datachannel',
-        peerId: id,
-        data: event.channel
-      })
-    })
+    pc.addEventListener('connectionstatechange', this.peerConnectionListeners.connectionstatechange)
+    pc.addEventListener('negotiationneeded', this.peerConnectionListeners.negotiationneeded)
+    pc.addEventListener('datachannel', this.peerConnectionListeners.datachannel)*/
   }
 
   /**
@@ -597,10 +616,10 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
-  public get logger() {
+  public get logger () {
     const canLog = (requestLevel: LogLevel) => {
       const allLevels: LogLevel[] = ['quiet', 'error', 'warn', 'info', 'debug']
-      return allLevels.slice(0, allLevels.indexOf(this.logLevel) + 1).indexOf(requestLevel)>-1;
+      return allLevels.slice(0, allLevels.indexOf(this.logLevel) + 1).indexOf(requestLevel) > -1
     }
 
     return {
@@ -618,9 +637,24 @@ export class WebRTCStats extends EventEmitter {
       },
       debug (...msg) {
         if (this.debug && canLog('debug'))
-          console.debug(`[webrtc-stats][debug] `,...msg)
+          console.debug(`[webrtc-stats][debug] `, ...msg)
       }
     }
+  }
+
+  public removePeer (id: string) {
+    this.logger.info(`Removing PeerConnection with id ${id}.`)
+    if (!this.peersToMonitor[id]) return
+
+    const pc = this.peersToMonitor[id].pc
+
+    // remove all PeerConnection listeners
+    Object.keys(this.peerConnectionListeners).forEach(eventName => {
+      pc.removeEventListener(eventName, this.peerConnectionListeners[eventName].bind(this, id, pc), false)
+    })
+
+    // remove from peersToMonitor
+    delete this.peersToMonitor[id]
   }
 
   // TODO
