@@ -109,7 +109,12 @@ export class WebRTCStats extends EventEmitter {
     }
 
     if (this.peersToMonitor[peerId]) {
-      throw new Error(`We are already monitoring peer with id ${peerId}.`)
+      // remove an existing peer with same id if that peer is already closed.
+      if('closed' === this.peersToMonitor[peerId].pc.connectionState) {
+        this.removePeer(peerId)
+      } else {
+        throw new Error(`We are already monitoring peer with id ${peerId}.`)
+      }
     }
 
     const config = pc.getConfiguration()
@@ -240,8 +245,8 @@ export class WebRTCStats extends EventEmitter {
         const pc = peerObject.pc
 
         // stop monitoring closed peer connections
-        if (!pc || pc.signalingState === 'closed') {
-          delete this.peersToMonitor[id]
+        if (!pc || pc.connectionState === 'closed') {
+          this.removePeer(id)
           continue
         }
 
@@ -374,7 +379,7 @@ export class WebRTCStats extends EventEmitter {
         })
       },
       signalingstatechange: (id, pc) => {
-        this.logger.debug(`[pc-event] signalingstatechange | peerId: ${peerId}`)
+        this.logger.debug(`[pc-event] signalingstatechange | peerId: ${id}`)
         this.addToTimeline({
           event: 'onsignalingstatechange',
           tag: 'connection',
@@ -383,7 +388,7 @@ export class WebRTCStats extends EventEmitter {
         })
       },
       iceconnectionstatechange: (id, pc) => {
-        this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${peerId}`)
+        this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${id}`)
         this.addToTimeline({
           event: 'oniceconnectionstatechange',
           tag: 'connection',
@@ -392,7 +397,7 @@ export class WebRTCStats extends EventEmitter {
         })
       },
       icegatheringstatechange: (id, pc) => {
-        this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${peerId}`)
+        this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${id}`)
         this.addToTimeline({
           event: 'onicegatheringstatechange',
           tag: 'connection',
@@ -401,7 +406,7 @@ export class WebRTCStats extends EventEmitter {
         })
       },
       icecandidateerror: (id, pc, ev) => {
-        this.logger.debug(`[pc-event] icecandidateerror | peerId: ${peerId}`)
+        this.logger.debug(`[pc-event] icecandidateerror | peerId: ${id}`)
         this.addToTimeline({
           event: 'onicecandidateerror',
           tag: 'connection',
@@ -412,18 +417,16 @@ export class WebRTCStats extends EventEmitter {
         })
       },
       connectionstatechange: (id, pc) => {
-        this.logger.debug(`[pc-event] connectionstatechange | peerId: ${peerId}`)
+        this.logger.debug(`[pc-event] connectionstatechange | peerId: ${id}`)
         this.addToTimeline({
           event: 'onconnectionstatechange',
           tag: 'connection',
           peerId: id,
           data: pc.connectionState
         })
-        if('closed' === pc.connectionState)
-          this.removePeer(id)
       },
       negotiationneeded: (id, pc) => {
-        this.logger.debug(`[pc-event] negotiationneeded | peerId: ${peerId}`)
+        this.logger.debug(`[pc-event] negotiationneeded | peerId: ${id}`)
         this.addToTimeline({
           event: 'onnegotiationneeded',
           tag: 'connection',
@@ -431,7 +434,7 @@ export class WebRTCStats extends EventEmitter {
         })
       },
       datachannel: (id, pc, event) => {
-        this.logger.debug(`[pc-event] datachannel | peerId: ${peerId}`, event)
+        this.logger.debug(`[pc-event] datachannel | peerId: ${id}`, event)
         this.addToTimeline({
           event: 'ondatachannel',
           tag: 'datachannel',
