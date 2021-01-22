@@ -15,13 +15,13 @@ export interface WebRTCStatsConstructorOptions {
 }
 
 /**
- * quiet: Show nothing at all.
+ * none: Show nothing at all.
  * error: Log all errors.
  * warn: Only log all warnings and errors.
  * info: Informative messages including warnings and errors.
  * debug: Show everything including debugging information
  */
-export type LogLevel = 'quiet' | 'error' | 'warn' | 'info' | 'debug'
+export type LogLevel = 'none' | 'error' | 'warn' | 'info' | 'debug'
 
 export type TimelineTag = 'getUserMedia' | 'peer' | 'connection' | 'track' | 'datachannel' | 'stats'
 
@@ -61,9 +61,14 @@ export interface MonitoredPeersObject {
     [index: string]: MonitoredPeer
 }
 
+export interface TrackReport extends RTCStats {
+    bitrate?: number
+    packetRate?: number
+}
+
 interface StatsObjectDetails {
-    inbound: any
-    outbound: any
+    inbound: TrackReport[]
+    outbound: TrackReport[]
 }
 export interface StatsObject {
     audio: StatsObjectDetails

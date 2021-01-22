@@ -4,15 +4,15 @@ import {
   AddPeerOptions,
   MonitoredPeersObject,
   TimelineEvent,
+  TimelineTag,
   GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions, LogLevel
 } from './types/index'
 
 import {parseStats, map2obj} from './utils'
 
-
 export class WebRTCStats extends EventEmitter {
   private readonly isEdge: boolean
-  private getStatsInterval: number
+  private _getStatsInterval: number
   private monitoringSetInterval: number = 0
   private readonly rawStats: boolean
   private readonly statsObject: boolean
@@ -60,9 +60,7 @@ export class WebRTCStats extends EventEmitter {
 
     this.isEdge = !!window.RTCIceGatherer
 
-    // TODO a function here is not very consistent with the other declarations
-    this.setStatsInterval(options.getStatsInterval || 1000)
-
+    this.getStatsInterval = options.getStatsInterval || 1000
     this.rawStats = !!options.rawStats
     this.statsObject = !!options.statsObject
     this.filteredStats = !!options.filteredStats
@@ -70,14 +68,10 @@ export class WebRTCStats extends EventEmitter {
     // getUserMedia options
     this.shouldWrapGetUserMedia = !!options.wrapGetUserMedia
 
-    /**
-     * If we want to enable debug
-     * @return {Function}
-     */
-    this.debug = !!options.debug
-
     this.remote = !!options.remote
 
+    // If we want to enable debug
+    this.debug = !!options.debug
     this.logLevel = options.logLevel || "warn"
 
     // add event listeners for getUserMedia
@@ -110,7 +104,7 @@ export class WebRTCStats extends EventEmitter {
 
     if (this.peersToMonitor[peerId]) {
       // remove an existing peer with same id if that peer is already closed.
-      if('closed' === this.peersToMonitor[peerId].pc.connectionState) {
+      if(this.peersToMonitor[peerId].pc.connectionState === 'closed') {
         this.removePeer(peerId)
       } else {
         throw new Error(`We are already monitoring peer with id ${peerId}.`)
@@ -126,7 +120,7 @@ export class WebRTCStats extends EventEmitter {
       })
     }
 
-    this.addToTimeline({
+    this.emitEvent({
       event: 'addPeer',
       tag: 'peer',
       peerId: peerId,
@@ -145,7 +139,7 @@ export class WebRTCStats extends EventEmitter {
    * @param  {String} tag The tag to filter events (optional)
    * @return {Array}     The timeline array (or sub array if tag is defined)
    */
-  public getTimeline (tag): TimelineEvent[] {
+  public getTimeline (tag: TimelineTag): TimelineEvent[] {
     // sort the events by timestamp
     this.timeline = this.timeline.sort(
       (event1, event2) => event1.timestamp.getTime() - event2.timestamp.getTime()
@@ -190,14 +184,8 @@ export class WebRTCStats extends EventEmitter {
 
   /**
    * Used to start the setTimeout and request getStats from the peers
-   *
-   * configs used
-   * monitoringSetInterval
-   * getStatsInterval
-   * promBased
-   * peersToMonitor
    */
-  private startMonitoring () {
+  private startMonitoring (): void {
     if (this.monitoringSetInterval) return
 
     this.monitoringSetInterval = window.setInterval(() => {
@@ -210,90 +198,89 @@ export class WebRTCStats extends EventEmitter {
         .then((statsEvents: TimelineEvent[]) => {
           statsEvents.forEach((statsEventObject: TimelineEvent) => {
             // add it to the timeline and also emit the stats event
-            this.addCustomEvent('stats', statsEventObject)
+            this.emitEvent(statsEventObject)
           })
         })
-    }, this.getStatsInterval)
+    }, this._getStatsInterval)
   }
 
-  private stopMonitoring () {
+  private stopMonitoring (): void {
     if (this.monitoringSetInterval) {
       window.clearInterval(this.monitoringSetInterval)
       this.monitoringSetInterval = 0
     }
   }
 
-  private getStats (id: string = null): Promise<TimelineEvent[]> {
+  private async getStats (id: string = null): Promise<TimelineEvent[]> {
+    this.logger.info(id ? `Getting stats from peer ${id}` : `Getting stats from all peers`)
+    let peersToAnalyse: MonitoredPeersObject = {}
 
-    return new Promise(async (resolve, reject) => {
-      this.logger.info(id ? `Getting stats from peer ${id}` : `Getting stats from all peers`)
-      let peersToAnalyse: MonitoredPeersObject = {}
+    // if we want the stats for a specific peer
+    if (id) {
+      peersToAnalyse[id] = this.peersToMonitor[id]
+      if (!peersToAnalyse[id]) {
+        throw new Error(`Cannot get stats. Peer with id ${id} does not exist`)
+      }
+    } else {
+      // else, get stats for all of them
+      peersToAnalyse = this.peersToMonitor
+    }
 
-      if (!id) {
-        peersToAnalyse = this.peersToMonitor
-      } else if (this.peersToMonitor[id]) {
-        peersToAnalyse[id] = this.peersToMonitor[id]
-      } else {
-        return reject(new Error(`Cannot get stats. Peer with id ${id} does not exist`))
+    let statsEventList: TimelineEvent[] = []
+
+    for (const id in peersToAnalyse) {
+      const peerObject = this.peersToMonitor[id]
+      const pc = peerObject.pc
+
+      // stop monitoring closed peer connections
+      if (!pc || pc.signalingState === 'closed' || pc.connectionState === 'closed') {
+        this.removePeer(id)
+        continue
       }
 
-      let statsEventList: TimelineEvent[] = []
-
-      for (const id in peersToAnalyse) {
-
-        const peerObject = this.peersToMonitor[id]
-        const pc = peerObject.pc
-
-        // stop monitoring closed peer connections
-        if (!pc || pc.connectionState === 'closed') {
-          this.removePeer(id)
-          continue
-        }
-
-        try {
-          const prom = pc.getStats(null)
-          if (prom) {
-            // TODO modify the promise to yield responses over time
-            const res = await prom
-            // create an object from the RTCStats map
-            const statsObject = map2obj(res)
+      try {
+        const prom = pc.getStats(null)
+        if (prom) {
+          // TODO modify the promise to yield responses over time
+          const res = await prom
+          // create an object from the RTCStats map
+          const statsObject = map2obj(res)
 
 
-            const parseStatsOptions: ParseStatsOptions = {remote: peerObject.options.remote}
-            const parsedStats = parseStats(res, peerObject.stats.parsed, parseStatsOptions)
+          const parseStatsOptions: ParseStatsOptions = {remote: peerObject.options.remote}
+          const parsedStats = parseStats(res, peerObject.stats.parsed, parseStatsOptions)
 
-            const statsEventObject = {
-              event: 'stats',
-              tag: 'stats',
-              peerId: id,
-              data: parsedStats
-            } as TimelineEvent
+          const statsEventObject = {
+            event: 'stats',
+            tag: 'stats',
+            peerId: id,
+            data: parsedStats
+          } as TimelineEvent
 
-            if (this.rawStats === true) {
-              statsEventObject['rawStats'] = res
-            }
-            if (this.statsObject === true) {
-              statsEventObject['statsObject'] = statsObject
-            }
-            if (this.filteredStats === true) {
-              statsEventObject['filteredStats'] = this.filteroutStats(statsObject)
-            }
-
-            statsEventList.push(statsEventObject)
-
-            peerObject.stats.parsed = parsedStats
-            // peerObject.stats.raw = res
-
-          } else {
-            this.logger.error(`PeerConnection from peer ${id} did not return any stats data`)
+          if (this.rawStats === true) {
+            statsEventObject['rawStats'] = res
           }
-        } catch (e) {
-          this.logger.error(e)
-        }
-      }
+          if (this.statsObject === true) {
+            statsEventObject['statsObject'] = statsObject
+          }
+          if (this.filteredStats === true) {
+            statsEventObject['filteredStats'] = this.filteroutStats(statsObject)
+          }
 
-      resolve(statsEventList)
-    })
+          statsEventList.push(statsEventObject)
+
+          peerObject.stats.parsed = parsedStats
+          // peerObject.stats.raw = res
+
+        } else {
+          this.logger.error(`PeerConnection from peer ${id} did not return any stats data`)
+        }
+      } catch (e) {
+        this.logger.error(e)
+      }
+    }
+
+    return statsEventList
   }
 
   private wrapGetUserMedia (): void {
@@ -331,7 +318,7 @@ export class WebRTCStats extends EventEmitter {
    * @param  {Object} stats The parsed rtc stats object
    * @return {Object}       The new object with some keys deleted
    */
-  private filteroutStats (stats = {}) {
+  private filteroutStats (stats = {}): object {
     const fullObject = {...stats}
     for (const key in fullObject) {
       var stat = fullObject[key]
@@ -348,7 +335,7 @@ export class WebRTCStats extends EventEmitter {
       icecandidate: (id, pc, e) => {
         this.logger.debug('[pc-event] icecandidate | peerId: ${peerId}', e)
 
-        this.addToTimeline({
+        this.emitEvent({
           event: 'onicecandidate',
           tag: 'connection',
           peerId: id,
@@ -365,7 +352,7 @@ export class WebRTCStats extends EventEmitter {
         this.peersToMonitor[id].stream = stream
 
         this.addTrackEventListeners(track)
-        this.addCustomEvent('track', {
+        this.emitEvent({
           event: 'ontrack',
           tag: 'track',
           peerId: id,
@@ -380,16 +367,20 @@ export class WebRTCStats extends EventEmitter {
       },
       signalingstatechange: (id, pc) => {
         this.logger.debug(`[pc-event] signalingstatechange | peerId: ${id}`)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'onsignalingstatechange',
           tag: 'connection',
           peerId: id,
-          data: pc.signalingState
+          data: {
+            signalingState: pc.signalingState,
+            localDescription: pc.localDescription,
+            remoteDescription: pc.remoteDescription
+          }
         })
       },
       iceconnectionstatechange: (id, pc) => {
         this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${id}`)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'oniceconnectionstatechange',
           tag: 'connection',
           peerId: id,
@@ -398,7 +389,7 @@ export class WebRTCStats extends EventEmitter {
       },
       icegatheringstatechange: (id, pc) => {
         this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${id}`)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'onicegatheringstatechange',
           tag: 'connection',
           peerId: id,
@@ -407,7 +398,7 @@ export class WebRTCStats extends EventEmitter {
       },
       icecandidateerror: (id, pc, ev) => {
         this.logger.debug(`[pc-event] icecandidateerror | peerId: ${id}`)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'onicecandidateerror',
           tag: 'connection',
           peerId: id,
@@ -418,7 +409,7 @@ export class WebRTCStats extends EventEmitter {
       },
       connectionstatechange: (id, pc) => {
         this.logger.debug(`[pc-event] connectionstatechange | peerId: ${id}`)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'onconnectionstatechange',
           tag: 'connection',
           peerId: id,
@@ -427,7 +418,7 @@ export class WebRTCStats extends EventEmitter {
       },
       negotiationneeded: (id, pc) => {
         this.logger.debug(`[pc-event] negotiationneeded | peerId: ${id}`)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'onnegotiationneeded',
           tag: 'connection',
           peerId: id
@@ -435,7 +426,7 @@ export class WebRTCStats extends EventEmitter {
       },
       datachannel: (id, pc, event) => {
         this.logger.debug(`[pc-event] datachannel | peerId: ${id}`, event)
-        this.addToTimeline({
+        this.emitEvent({
           event: 'ondatachannel',
           tag: 'datachannel',
           peerId: id,
@@ -454,19 +445,6 @@ export class WebRTCStats extends EventEmitter {
     Object.keys(this.peerConnectionListeners).forEach(eventName => {
       pc.addEventListener(eventName, this.peerConnectionListeners[eventName].bind(this, id, pc), false)
     })
-
-    /*pc.addEventListener('icecandidate', this.peerConnectionListeners.icecandidate.bind(this, id, pc))
-
-    pc.addEventListener('track', this.peerConnectionListeners.track)
-
-    pc.addEventListener('signalingstatechange', this.peerConnectionListeners.signalingstatechange)
-    pc.addEventListener('iceconnectionstatechange', this.peerConnectionListeners.iceconnectionstatechange)
-    pc.addEventListener('icegatheringstatechange', this.peerConnectionListeners.icegatheringstatechange)
-    pc.addEventListener('icecandidateerror', this.peerConnectionListeners.icecandidateerror)
-
-    pc.addEventListener('connectionstatechange', this.peerConnectionListeners.connectionstatechange)
-    pc.addEventListener('negotiationneeded', this.peerConnectionListeners.negotiationneeded)
-    pc.addEventListener('datachannel', this.peerConnectionListeners.datachannel)*/
   }
 
   /**
@@ -485,26 +463,19 @@ export class WebRTCStats extends EventEmitter {
       obj.data.details = this.parseStream(options.stream)
     }
 
-    this.addCustomEvent('getUserMedia', obj)
+    this.emitEvent(obj)
   }
 
   private parseStream (stream: MediaStream) {
     const result = {
-      audio: null,
-      video: null
+      audio: [],
+      video: []
     }
 
-    // at this point we only read one stream
-    const audioTrack = stream.getAudioTracks()[0]
-    const videoTrack = stream.getVideoTracks()[0]
-
-    if (audioTrack) {
-      result['audio'] = this.getMediaTrackDetails(audioTrack)
-    }
-
-    if (videoTrack) {
-      result['video'] = this.getMediaTrackDetails(videoTrack)
-    }
+    const tracks = stream.getTracks()
+    tracks.forEach((track) => {
+      result[track.kind].push(this.getMediaTrackDetails(track))
+    })
 
     return result
   }
@@ -541,7 +512,7 @@ export class WebRTCStats extends EventEmitter {
    */
   private addTrackEventListeners (track: MediaStreamTrack) {
     track.addEventListener('mute', (ev) => {
-      this.addCustomEvent('track', {
+      this.emitEvent({
         event: 'mute',
         tag: 'track',
         data: {
@@ -550,7 +521,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     track.addEventListener('unmute', (ev) => {
-      this.addCustomEvent('track', {
+      this.emitEvent({
         event: 'unmute',
         tag: 'track',
         data: {
@@ -559,7 +530,7 @@ export class WebRTCStats extends EventEmitter {
       })
     })
     track.addEventListener('overconstrained', (ev) => {
-      this.addCustomEvent('track', {
+      this.emitEvent({
         event: 'overconstrained',
         tag: 'track',
         data: {
@@ -569,7 +540,7 @@ export class WebRTCStats extends EventEmitter {
     })
 
     track.addEventListener('ended', (ev) => {
-      this.addCustomEvent('track', {
+      this.emitEvent({
         event: 'ended',
         tag: 'track',
         data: {
@@ -580,24 +551,26 @@ export class WebRTCStats extends EventEmitter {
   }
 
   private addToTimeline (event: TimelineEvent) {
+    this.timeline.push(event)
+    this.emit('timeline', event)
+  }
+
+  /**
+   * Used to emit a custom event and also add it to the timeline
+   * @param {String} eventName The name of the custome event: track, getUserMedia, stats, etc
+   * @param {Object} options   The object tha will be sent with the event
+   */
+  private emitEvent (event: TimelineEvent) {
     const ev = {
       ...event,
       timestamp: new Date()
     }
-    this.timeline.push(ev)
+    // add event to timeline
+    this.addToTimeline(ev)
 
-    this.emit('timeline', ev)
-  }
-
-  /**
-   * Used to emit a custome event and also add it to the timeline
-   * @param {String} eventName The name of the custome event: track, getUserMedia, stats, etc
-   * @param {Object} options   The object tha will be sent with the event
-   */
-  private addCustomEvent (eventName: string, options: TimelineEvent) {
-    this.addToTimeline(options)
-    if (eventName) {
-      this.emit(eventName, options)
+    if (ev.tag) {
+      // and emit this event
+      this.emit(ev.tag, ev)
     }
   }
 
@@ -606,11 +579,13 @@ export class WebRTCStats extends EventEmitter {
    * @param interval
    *        Interval in milliseconds
    */
-  public setStatsInterval (interval: number) {
-    this.getStatsInterval = interval
-    if (!this.getStatsInterval || !Number.isInteger(this.getStatsInterval)) {
+  set getStatsInterval (interval: number) {
+    if (!Number.isInteger(interval)) {
       throw new Error(`getStatsInterval should be an integer, got: ${interval}`)
     }
+
+    this._getStatsInterval = interval
+
     // TODO to be tested
     // Reset restart the interval with new value
     if (this.monitoringSetInterval) {
@@ -621,7 +596,7 @@ export class WebRTCStats extends EventEmitter {
 
   public get logger () {
     const canLog = (requestLevel: LogLevel) => {
-      const allLevels: LogLevel[] = ['quiet', 'error', 'warn', 'info', 'debug']
+      const allLevels: LogLevel[] = ['none', 'error', 'warn', 'info', 'debug']
       return allLevels.slice(0, allLevels.indexOf(this.logLevel) + 1).indexOf(requestLevel) > -1
     }
 

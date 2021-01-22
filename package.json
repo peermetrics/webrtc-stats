@@ -14,10 +14,8 @@
   ],
   "scripts": {
     "build": "rollup -c",
-    "serve": "npm run build && npm run copy && http-server dist",
+    "serve": "http-server example",
     "watch": "rollup -c -w",
-    "clean": "del dist",
-    "copy": "cpy './src/index.html' './dist'",
     "prepublishOnly": "npm run build",
     "pretest": "npm run build",
     "test": "echo 'Soon'"
@@ -27,20 +25,19 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@babel/core": "^7.8.3",
-    "@babel/preset-env": "^7.8.3",
-    "@babel/preset-typescript": "^7.8.3",
-    "@rollup/plugin-typescript": "^4.0.0",
+    "@babel/core": "^7.12.10",
+    "@babel/preset-env": "^7.12.11",
+    "@babel/preset-typescript": "^7.12.7",
+    "@rollup/plugin-typescript": "^4.1.2",
     "@types/webrtc": "0.0.26",
     "babel-preset-minify": "^0.5.1",
-    "cpy-cli": "^3.0.0",
-    "del-cli": "^3.0.0",
-    "http-server": "^0.12.1",
-    "rollup": "^1.29.1",
+    "http-server": "^0.12.3",
+    "rollup": "^1.32.1",
     "rollup-plugin-babel": "^4.3.3",
     "rollup-plugin-node-builtins": "^2.1.2",
-    "standard": "^14.0.0",
-    "typescript": "^3.8.3"
+    "rollup-plugin-terser": "^7.0.2",
+    "standard": "^14.3.4",
+    "typescript": "^3.9.7"
   },
   "publishConfig": {
     "access": "public"
@@ -48,7 +45,7 @@
   "standard": {
     "ignore": [
       "**/dist/",
-      "**.html"
+      "**/example/"
     ]
   }
 }

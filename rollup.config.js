@@ -2,6 +2,7 @@ import typescript from '@rollup/plugin-typescript'
 
 import builtins from 'rollup-plugin-node-builtins'
 import babel from 'rollup-plugin-babel'
+import { terser } from 'rollup-plugin-terser'
 
 import pkg from './package.json'
 import babelConfig from './.babelrc.json'
@@ -13,17 +14,21 @@ const plugins = [
 ]
 
 export default [{
-  input: 'src/browser.mjs',
+  input: 'src/index.ts',
   output: [
     {
       file: pkg.browser,
-      format: 'iife'
-    }
-  ],
-  plugins: plugins
-}, {
-  input: 'src/module.ts',
-  output: [
+      name: 'window',
+      format: 'iife',
+      extend: true
+    },
+    {
+      file: 'dist/browser.min.js',
+      format: 'iife',
+      name: 'window',
+      extend: true,
+      plugins: [terser()]
+    },
     {
       file: pkg.main,
       format: 'cjs'

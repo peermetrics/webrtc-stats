@@ -1,0 +1,144 @@
+<html>
+  <head>
+  </head>
+  <body>
+    <div id="localVideo"></div>
+    <div id="remoteVideo"></div>
+    <button id="startButton">start</button>
+    <button id="callButton">call</button>
+    <button id="hangupButton">hangup</button>
+    <script src="https://unpkg.com/@peermetrics/webrtc-stats@latest/dist/browser.js"></script>
+
+    <script>
+      window.stats = new WebRTCStats({
+        getStatsInterval: 2000,
+        rawStats: true,
+        statsObject: true,
+        filteredStats: true,
+        wrapGetUserMedia: true,
+        debug: true,
+        remote: true
+      })
+
+      window.stats.on('timeline', (ev) => {
+        console.log('timeline', ev)
+      })
+    </script>
+
+    <script>
+      'use strict';
+
+      // simple example
+      const startButton = document.getElementById('startButton');
+      const callButton = document.getElementById('callButton');
+      const hangupButton = document.getElementById('hangupButton');
+      callButton.disabled = true;
+      hangupButton.disabled = true;
+      startButton.addEventListener('click', start);
+      callButton.addEventListener('click', call);
+      hangupButton.addEventListener('click', hangup);
+
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+
+      let localStream;
+      let remoteStream;
+      let pc1;
+      let pc2;
+      const offerOptions = {
+        offerToReceiveAudio: 1,
+        offerToReceiveVideo: 1
+      };
+
+      const gUMConstraints = {
+        audio: true,
+        video: true
+      }
+
+      function getOtherPc(pc) {
+        return (pc === pc1) ? pc2 : pc1;
+      }
+
+      async function start() {
+        // console.log('Requesting local stream');
+        startButton.disabled = true;
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia(gUMConstraints);
+          console.log('Got stream for peer 1')
+          remoteStream = await navigator.mediaDevices.getUserMedia(gUMConstraints);
+          console.log('Got stream for peer 2')
+
+          localVideo.srcObject = localStream;
+          callButton.disabled = false;
+        } catch (e) {
+          alert(`getUserMedia() error: ${e.name}`);
+        }
+      }
+
+      async function call() {
+        callButton.disabled = true;
+        hangupButton.disabled = false;
+
+        const configuration = {}
+
+        // peer 1
+        pc1 = new RTCPeerConnection(configuration);
+        pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
+
+        stats.addPeer({
+          pc: pc1,
+          peerId: '1'
+        })
+
+        // peer 2
+        pc2 = new RTCPeerConnection(configuration);
+        pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
+        pc2.addEventListener('track', gotRemoteStream);
+
+        localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
+        remoteStream.getTracks().forEach(track => pc2.addTrack(track, remoteStream));
+
+        const offer = await pc1.createOffer(offerOptions);
+        await pc1.setLocalDescription(offer);
+
+        await pc2.setRemoteDescription(offer);
+        const answer = await pc2.createAnswer();
+
+        await pc2.setLocalDescription(answer);
+        await pc1.setRemoteDescription(answer);
+      }
+
+      function gotRemoteStream(e) {
+        if (remoteVideo.srcObject !== e.streams[0]) {
+          remoteVideo.srcObject = e.streams[0];
+        }
+      }
+
+      async function onIceCandidate(pc, event) {
+        if (!event.candidate) return
+        await (getOtherPc(pc).addIceCandidate(event.candidate));
+      }
+
+      function hangup() {
+        let local = pc1.getSenders()
+        for (let rtpSender of local) {
+            if (rtpSender.track) {
+                rtpSender.track.stop()
+            }
+        }
+        local = pc2.getSenders()
+        for (let rtpSender of local) {
+            if (rtpSender.track) {
+                rtpSender.track.stop()
+            }
+        }
+        pc1.close();
+        pc2.close();
+        pc1 = null;
+        pc2 = null;
+        hangupButton.disabled = true;
+        callButton.disabled = false;
+      }
+    </script>
+  </body>
+</html>

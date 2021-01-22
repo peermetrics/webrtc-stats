@@ -1,34 +1,40 @@
-import {StatsObject, CodecInfo, ParseStatsOptions} from './types/index'
+import {StatsObject, CodecInfo, TrackReport, ParseStatsOptions} from './types/index'
 
 /**
  * A set of methods used to parse the rtc stats
  */
 
-function addAdditionalData (currentStats, previousStats) {
+function addAdditionalData (currentStats: StatsObject, previousStats?: StatsObject) {
   // we need the previousStats stats to compute thse values
   if (!previousStats) return currentStats
 
   // audio
-  for (const id in currentStats.audio.outbound) {
-    currentStats.audio.outbound[id].bitrate = computeBitrate(currentStats.audio.outbound[id], previousStats.audio.outbound[id], 'bytesSent')
-    currentStats.audio.outbound[id].packetRate = computeRate(currentStats.audio.outbound[id], previousStats.audio.outbound[id], 'packetsSent')
-  }
-
-  for (const id in currentStats.audio.inbound) {
-    currentStats.audio.inbound[id].bitrate = computeBitrate(currentStats.audio.inbound[id], previousStats.audio.inbound[id], 'bytesReceived')
-    currentStats.audio.inbound[id].packetRate = computeRate(currentStats.audio.inbound[id], previousStats.audio.inbound[id], 'packetsReceived')
-  }
+  // inbound
+  currentStats.audio.inbound.map((report) => {
+    let prev = previousStats.audio.inbound.find(r => r.id === report.id)
+    report.bitrate = computeBitrate(report, prev, 'bytesReceived')
+    report.packetRate = computeBitrate(report, prev, 'packetsReceived')
+  })
+  // outbound
+  currentStats.audio.outbound.map((report) => {
+    let prev = previousStats.audio.outbound.find(r => r.id === report.id)
+    report.bitrate = computeBitrate(report, prev, 'bytesSent')
+    report.packetRate = computeBitrate(report, prev, 'packetsSent')
+  })
 
   // video
-  for (const id in currentStats.video.outbound) {
-    currentStats.video.outbound[id].bitrate = computeBitrate(currentStats.video.outbound[id], previousStats.video.outbound[id], 'bytesSent')
-    currentStats.video.outbound[id].packetRate = computeRate(currentStats.video.outbound[id], previousStats.video.outbound[id], 'packetsSent')
-  }
-
-  for (const id in currentStats.video.inbound) {
-    currentStats.video.inbound[id].bitrate = computeBitrate(currentStats.video.inbound[id], previousStats.video.inbound[id], 'bytesReceived')
-    currentStats.video.inbound[id].packetRate = computeRate(currentStats.video.inbound[id], previousStats.video.inbound[id], 'packetsReceived')
-  }
+  // inbound
+  currentStats.video.inbound.map((report) => {
+    let prev = previousStats.video.inbound.find(r => r.id === report.id)
+    report.bitrate = computeBitrate(report, prev, 'bytesReceived')
+    report.packetRate = computeBitrate(report, prev, 'packetsReceived')
+  })
+  // outbound
+  currentStats.video.outbound.map((report) => {
+    let prev = previousStats.video.outbound.find(r => r.id === report.id)
+    report.bitrate = computeBitrate(report, prev, 'bytesSent')
+    report.packetRate = computeBitrate(report, prev, 'packetsSent')
+  })
 
   return currentStats
 }
@@ -53,9 +59,9 @@ function getCandidatePairInfo (candidatePair, stats) {
 
 // Takes two stats reports and determines the rate based on two counter readings
 // and the time between them (which is in units of milliseconds).
-export function computeRate (newReport: any, oldReport: any, statName: string): number {
+export function computeRate (newReport: TrackReport, oldReport: TrackReport, statName: string): number {
   const newVal = newReport[statName]
-  const oldVal = (oldReport) ? oldReport[statName] : null
+  const oldVal = oldReport ? oldReport[statName] : null
   if (newVal === null || oldVal === null) {
     return null
   }
@@ -63,7 +69,7 @@ export function computeRate (newReport: any, oldReport: any, statName: string): 
 }
 
 // Convert a byte rate to a bit rate.
-export function computeBitrate (newReport: any, oldReport: any, statName: string): number {
+export function computeBitrate (newReport: TrackReport, oldReport: TrackReport, statName: string): number {
   return computeRate(newReport, oldReport, statName) * 8
 }
 
@@ -79,13 +85,11 @@ export function map2obj (stats: any) {
 }
 
 // Enumerates the new standard compliant stats using local and remote track ids.
-export function parseStats (stats: any, previousStats: StatsObject | null, opts?: ParseStatsOptions | null): StatsObject {
+export function parseStats (stats: any, previousStats: StatsObject | null, options: ParseStatsOptions | null = {}): StatsObject {
   // Create an object structure with all the needed stats and types that we care
   // about. This allows to map the getStats stats to other stats names.
 
   if (!stats) return null
-
-  const options = opts?opts:{}
 
   /**
    * The starting object where we will save the details from the stats report
@@ -93,39 +97,41 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
    */
   let statsObject = {
     audio: {
-      inbound: {},
-      outbound: {}
+      inbound: [],
+      outbound: []
     },
     video: {
-      inbound: {},
-      outbound: {}
+      inbound: [],
+      outbound: []
     },
     connection: {
-      inbound: {},
-      outbound: {},
-    },
-    remote: {     // TODO dynamically add later???
-      audio:{
-        inbound:{},
-        outbound: {}
-      },
-      video:{
-        inbound: {},
-        outbound: {}
-      }
+      inbound: [],
+      outbound: []
     }
   } as StatsObject
+
+  // if we want to collect remote data also
+  if (options.remote) {
+    statsObject.remote = {
+      audio:{
+        inbound: [],
+        outbound: []
+      },
+      video:{
+        inbound: [],
+        outbound: []
+      }
+    }
+  }
+
   for (const report of stats.values()) {
     // TODO remove duplicate code remote vs local rtp. Only the place where we save is different.
     switch (report.type) {
       case 'outbound-rtp': {
-        const mediaType = report.mediaType || report.kind
         let outbound = {}
+        const mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
         if (!['audio', 'video'].includes(mediaType)) continue
-
-        // TODO why set here if it's set at the end?
-        // statsObject[mediaType].outbound[report.id] = report
 
         if (report.remoteId) {
           outbound = stats.get(report.remoteId)
@@ -142,12 +148,12 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
           }
         }
 
-        statsObject[mediaType].outbound[report.id] = {...report, ...outbound, ...codecInfo}
+        statsObject[mediaType].outbound.push({...report, ...outbound, ...codecInfo})
         break
       }
       case 'inbound-rtp': {
-        let mediaType = report.mediaType || report.kind
         let inbound = {}
+        let mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
 
         // Safari is missing mediaType and kind for 'inbound-rtp'
@@ -156,8 +162,6 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
           else if (report.id.includes('Audio')) mediaType = 'audio'
           else continue
         }
-        // TODO any reason to leave this here?
-        // statsObject[mediaType].remote = report
 
         if (report.remoteId) {
           inbound = stats.get(report.remoteId)
@@ -185,7 +189,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
           }
         }
 
-        statsObject[mediaType].inbound[report.id] = {...report, ...inbound, ...codecInfo}
+        statsObject[mediaType].inbound.push({...report, ...inbound, ...codecInfo})
         break
       }
       case 'peer-connection': {
@@ -195,8 +199,8 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
       }
       case 'remote-inbound-rtp': {
         if(!options.remote) break
-        let mediaType = report.mediaType || report.kind
         let inbound = {}
+        let mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
 
         // Safari is missing mediaType and kind for 'inbound-rtp'
@@ -234,13 +238,13 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
           }
         }
 
-        statsObject.remote[mediaType].inbound[report.id] = {...report, ...inbound, ...codecInfo}
+        statsObject.remote[mediaType].inbound.push({...report, ...inbound, ...codecInfo})
         break
       }
       case 'remote-outbound-rtp': {
         if(!options.remote) break
-        const mediaType = report.mediaType || report.kind
         let outbound = {}
+        const mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
         if (!['audio', 'video'].includes(mediaType)) continue
 
@@ -262,7 +266,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, opts?
           }
         }
 
-        statsObject.remote[mediaType].outbound[report.id] = {...report, ...outbound, ...codecInfo}
+        statsObject.remote[mediaType].outbound.push({...report, ...outbound, ...codecInfo})
         break
       }
       default:
