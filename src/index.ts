@@ -72,7 +72,7 @@ export class WebRTCStats extends EventEmitter {
 
     // If we want to enable debug
     this.debug = !!options.debug
-    this.logLevel = options.logLevel || "warn"
+    this.logLevel = options.logLevel || "none"
 
     // add event listeners for getUserMedia
     if (this.shouldWrapGetUserMedia) {

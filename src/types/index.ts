@@ -1,14 +1,10 @@
 
 export interface WebRTCStatsConstructorOptions {
     getStatsInterval: number
-    wrapRTCPeerConnection: boolean
     rawStats: boolean
     statsObject: boolean
     filteredStats: boolean
-    compressStats: boolean
     wrapGetUserMedia: boolean
-    wrapLegacyGetUserMedia: boolean
-    prefixesToWrap: string[]
     debug: boolean
     remote: boolean
     logLevel: LogLevel

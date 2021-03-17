@@ -1,22 +1,20 @@
-# WebRTC Stats
+# WebRTCStats
 
-WebRTC Stats helps you with everything related to getting and parsing the stats for your app's WebRTC PeerConnections.
-On top of handling getting the stats for each peer in the call it also offers a parsed object that better helps you understand what's happening with the connection.
+WebRTCStats is the most complete utility belt that helps with everything related to getting and parsing the stats for WebRTC `PeerConnection`s.
 
-WebRTC Stats is using `EventEmitter` to fire events that you can listen to in your app.
+The main advantage of WebRTCStats is that it parses and groups the stats from `PeerConnection`s and offers them in a easy to read way
 
-The library is heavily inspired by [@fippo](https://github.com/fippo)'s work on a similar library.
+On top of that, it offers the `timeline` which is a list of all the events fired while setting up a `PeerConnection`. Optionally, you can also wrap `getUserMedia` to get a better picture.
 
-#### Migrating from v1
-To see the changes that appeared in V2 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v2.0.0)
+WebRTCStats extends `EventEmitter` and uses the same event system to communicate with the rest of the app.
 
-## How it works
+#### Migrating from v2
+To see the changes that appeared in V3 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v3.0.0)
 
-The main idea of WebRTC Stats is to offer an easy way to read stats from `RTCPeerConnection`s. It helps with gathering the stats and has a pretty helpful object that helps you understand how that connection is going.
 
-On top of that, it offers the `timeline` which is a list of events gathered from the RTC connections that will definitely help you with debugging. These are optional, but by wrapping methods like `getUserMedia`, `createOffer`, `addTrack`, etc. you get a clear picture of what happened.
 
 ## Install
+
 ```sh
 npm install @peermetrics/webrtc-stats
 ```
@@ -25,28 +23,29 @@ npm install @peermetrics/webrtc-stats
 ### Loading the module
 WebRTC Stats can be loaded as an ES6 module, node module or directly in the browser.
 
-After loading the module, initialize it. 
-*See [Options](#options) for all the initialize options*
+After loading, the library needs to be initialized.  *See [Options](#options) for all the initialize options*
+
 ```js
-let stats = new WebRTCStats({
+let webrtcStats = new WebRTCStats({
     getStatsInterval: 5000
 })
 ```
 Add event listeners for `stats`:
 ```js
-stats.on('stats', (ev) => {
+webrtcStats.on('stats', (ev) => {
     console.log('stats', ev)
 })
 ```
 Use `addPeer` to add peers to the list of monitored peers:
 ```js
 let pc1 = new RTCPeerConnection({...})
-stats.addPeer({
+webrtcStats.addPeer({
     pc: pc1,
-    peerId: '1' # any string/int that helps you identify this peer
+    peerId: '1' # any string that helps you identify this peer,
+	remote: false # optional, override the global remote flag
 })
 ```
-Now every `5000` ms  WebRTC Stats will fire the `stats` event which will come with the object:
+Now every `5000` ms  WebRTCStats will fire the `stats` event which will come with the object:
 ```js
 {
     event: 'stats',
@@ -75,12 +74,18 @@ let stats = new WebRTCStats({
     
     # if we should filter out some stats
     filteredStats: false, # Default: false
-    
+
+    # If the data object should contain a remote attribute that will contain stats for the remote peer, from `remote-inbound-rtp`, etc
+    remote: true, # Default: false
+
     # If we should wrap the `geUserMedia` calls so we can gather events when the methods is called or success/error
     wrapGetUserMedia: false, # Default: false
     
-    # If turned on, calls `console.log`
+    # If we should log messages
     debug: false, # Default: false
+    
+    # What kind of level of logs the lib should display. Values: 'none', 'error', 'warn', 'info', 'debug'
+    logLevel: 'warn' # Default: 'none'
 })
 ```
 
@@ -90,8 +95,12 @@ Adds a peer to the watch list.
 `options`
 
   - `pc`: the `RTCPeerConnection` instance
-  - `peerId`: String/Int a unique Id to identify this peer
+  - `peerId`: String a unique Id to identify this peer
 Monitoring of a peer will automatically end when the connection is closed.
+
+#### `.removePeer(peerId)`
+
+Stop listening for events/stats for this peer
 
 #### `.getTimeline([filter])`
 Return the array of events from the timeline up to that point.
@@ -129,8 +138,10 @@ stats.on('eventName', (ev) => {
 ```
 
 #### List of fired events
-Some events are not fired if for example `wrapLegacyGetUserMedia` and `wrapRTCPeerConnection` are `false`.
-- `timeline`: this will fire when something has been added to the timeline. 
+
+The tags for the events fired by `WebRTCStats` are:
+
+- `timeline`: this will fire when something has been added to the timeline. This event is a duplicate of the following events
 - `stats`: fired for each peer when we've collected stats for it
 - `getUserMedia`: when `getUserMedia` is called initially
 - `peer`: when a peer was added
