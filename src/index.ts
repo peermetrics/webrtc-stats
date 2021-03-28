@@ -14,6 +14,8 @@ export class WebRTCStats extends EventEmitter {
   private readonly isEdge: boolean
   private _getStatsInterval: number
   private monitoringSetInterval: number = 0
+  private connectionMonitoringSetInterval: number = 0
+  private connectionMonitoringInterval: number = 1000
   private readonly rawStats: boolean
   private readonly statsObject: boolean
   private readonly filteredStats: boolean
@@ -178,20 +180,21 @@ export class WebRTCStats extends EventEmitter {
 
     // start monitoring from the first peer added
     if (Object.keys(this.peersToMonitor).length === 1) {
-      this.startMonitoring()
+      this.startStatsMonitoring()
+      this.startConnectionStateMonitoring()
     }
   }
 
   /**
    * Used to start the setTimeout and request getStats from the peers
    */
-  private startMonitoring (): void {
+  private startStatsMonitoring (): void {
     if (this.monitoringSetInterval) return
 
     this.monitoringSetInterval = window.setInterval(() => {
       // if we ran out of peers to monitor
       if (!Object.keys(this.peersToMonitor).length) {
-        this.stopMonitoring()
+        this.stopStatsMonitoring()
       }
 
       this.getStats() // get stats from all peer connections
@@ -204,7 +207,7 @@ export class WebRTCStats extends EventEmitter {
     }, this._getStatsInterval)
   }
 
-  private stopMonitoring (): void {
+  private stopStatsMonitoring (): void {
     if (this.monitoringSetInterval) {
       window.clearInterval(this.monitoringSetInterval)
       this.monitoringSetInterval = 0
@@ -232,9 +235,8 @@ export class WebRTCStats extends EventEmitter {
       const peerObject = this.peersToMonitor[id]
       const pc = peerObject.pc
 
-      // stop monitoring closed peer connections
-      if (!pc || pc.signalingState === 'closed' || pc.connectionState === 'closed') {
-        this.removePeer(id)
+      // if this connection is closed, continue
+      if (!pc || this.isConnectionClosed(id, pc)) {
         continue
       }
 
@@ -281,6 +283,45 @@ export class WebRTCStats extends EventEmitter {
     }
 
     return statsEventList
+  }
+
+  private startConnectionStateMonitoring (): void {
+    this.connectionMonitoringSetInterval = window.setInterval(() => {
+      if (!Object.keys(this.peersToMonitor).length) {
+        this.stopConnectionStateMonitoring()
+      }
+
+      for (const id in this.peersToMonitor) {
+        const peerObject = this.peersToMonitor[id]
+        const pc = peerObject.pc
+
+        this.isConnectionClosed(id, pc)
+      }
+    }, this.connectionMonitoringInterval)
+  }
+
+  private isConnectionClosed (id: string, pc: RTCPeerConnection): boolean {
+    if (pc.connectionState === 'closed' || pc.iceConnectionState === 'closed') {
+      // event name should be deppending on what we detect as closed
+      let event = pc.connectionState === 'closed' ? 'onconnectionstatechange' : 'oniceconnectionstatechange'
+      this.emitEvent({
+        event,
+        tag: 'connection',
+        peerId: id,
+        data: 'closed'
+      })
+      this.removePeer(id)
+      return false
+    }
+
+    return true
+  }
+
+  private stopConnectionStateMonitoring(): void {
+    if (this.connectionMonitoringSetInterval) {
+      window.clearInterval(this.connectionMonitoringSetInterval)
+      this.connectionMonitoringSetInterval = 0
+    }
   }
 
   private wrapGetUserMedia (): void {
@@ -589,8 +630,8 @@ export class WebRTCStats extends EventEmitter {
     // TODO to be tested
     // Reset restart the interval with new value
     if (this.monitoringSetInterval) {
-      this.stopMonitoring()
-      this.startMonitoring()
+      this.stopStatsMonitoring()
+      this.startStatsMonitoring()
     }
   }
 
