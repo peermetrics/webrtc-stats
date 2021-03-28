@@ -311,10 +311,10 @@ export class WebRTCStats extends EventEmitter {
         data: 'closed'
       })
       this.removePeer(id)
-      return false
+      return true
     }
 
-    return true
+    return false
   }
 
   private stopConnectionStateMonitoring(): void {
