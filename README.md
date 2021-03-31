@@ -26,6 +26,8 @@ WebRTC Stats can be loaded as an ES6 module, node module or directly in the brow
 After loading, the library needs to be initialized.  *See [Options](#options) for all the initialize options*
 
 ```js
+import {WebRTCStats} from '@peermetrics/webrtc-stats'
+
 let webrtcStats = new WebRTCStats({
     getStatsInterval: 5000
 })
