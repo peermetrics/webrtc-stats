@@ -21,7 +21,7 @@ export class WebRTCStats extends EventEmitter {
   private readonly filteredStats: boolean
   private readonly shouldWrapGetUserMedia: boolean
   private debug: any
-  private readonly remote: boolean
+  private readonly remote: boolean = true
   private peersToMonitor: MonitoredPeersObject = {}
   private logLevel: LogLevel
 
@@ -70,7 +70,9 @@ export class WebRTCStats extends EventEmitter {
     // getUserMedia options
     this.shouldWrapGetUserMedia = !!options.wrapGetUserMedia
 
-    this.remote = !!options.remote
+    if (typeof options.remote === 'boolean') {
+      this.remote = options.remote
+    }
 
     // If we want to enable debug
     this.debug = !!options.debug

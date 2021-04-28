@@ -8,9 +8,8 @@ On top of that, it offers the `timeline` which is a list of all the events fired
 
 WebRTCStats extends `EventEmitter` and uses the same event system to communicate with the rest of the app.
 
-#### Migrating from v2
-To see the changes that appeared in V3 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v3.0.0)
-
+#### Migrating from v3
+To see the changes that appeared in V4 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v4.0.0)
 
 
 ## Install
@@ -43,8 +42,8 @@ Use `addPeer` to add peers to the list of monitored peers:
 let pc1 = new RTCPeerConnection({...})
 webrtcStats.addPeer({
     pc: pc1,
-    peerId: '1' # any string that helps you identify this peer,
-	remote: false # optional, override the global remote flag
+    peerId: '1' // any string that helps you identify this peer,
+	remote: false // optional, override the global remote flag
 })
 ```
 Now every `5000` ms  WebRTCStats will fire the `stats` event which will come with the object:
@@ -53,11 +52,11 @@ Now every `5000` ms  WebRTCStats will fire the `stats` event which will come wit
     event: 'stats',
     tag: 'stats',
     peerId: '1',
-    timestamp: 'Sun Mar 22 2020 18:02:02', # a timestamp when this was fired
-    data: {...}, # an object created after parsing the stats
-    rawStats: RTCStatsReport, # the actual RTCStatsReport results from `getStats()`
-    statsObject: {}, # an object created from RTCStatsReport that uses the `id` for each report as a key
-    filteredStats: {}, # same as statsObject but with some report types filtered out (eg: `codec`, `certificate`)
+    timestamp: 'Sun Mar 22 2020 18:02:02', // a timestamp when this was fired
+    data: {...}, // an object created after parsing the stats
+    rawStats: RTCStatsReport, // the actual RTCStatsReport results from `getStats()`
+    statsObject: {}, // an object created from RTCStatsReport that uses the `id` for each report as a key
+    filteredStats: {}, // same as statsObject but with some report types filtered out (eg: `codec`, `certificate`)
 }
 ```
 
@@ -65,29 +64,29 @@ Now every `5000` ms  WebRTCStats will fire the `stats` event which will come wit
 The module accepts the following options when initialized:
 ```js
 let stats = new WebRTCStats({
-    # the interval in ms of how often we should get stats
-    getStatsInterval: 5000, # Default: 1000
+    // the interval in ms of how often we should get stats
+    getStatsInterval: 5000, // Default: 1000
 
-    # if we should include the original RTCStatsReport map when firing the `stats` event
-    rawStats: false, # Default: false
+    // if we should include the original RTCStatsReport map when firing the `stats` event
+    rawStats: false, // Default: false
 
-    # include an object that resulted from transforming RTCStatsReport into an oject (`report.id` as the key)
-    statsObject: true, # Default: false
+    // include an object that resulted from transforming RTCStatsReport into an oject (`report.id` as the key)
+    statsObject: true, // Default: false
     
-    # if we should filter out some stats
-    filteredStats: false, # Default: false
+    // if we should filter out some stats
+    filteredStats: false, // Default: false
 
-    # If the data object should contain a remote attribute that will contain stats for the remote peer, from `remote-inbound-rtp`, etc
-    remote: true, # Default: false
+    // If the data object should contain a remote attribute that will contain stats for the remote peer, from `remote-inbound-rtp`, etc
+    remote: true, // Default: true
 
-    # If we should wrap the `geUserMedia` calls so we can gather events when the methods is called or success/error
-    wrapGetUserMedia: false, # Default: false
+    // If we should wrap the `geUserMedia` calls so we can gather events when the methods is called or success/error
+    wrapGetUserMedia: false, // Default: false
     
-    # If we should log messages
-    debug: false, # Default: false
+    // If we should log messages
+    debug: false, // Default: false
     
-    # What kind of level of logs the lib should display. Values: 'none', 'error', 'warn', 'info', 'debug'
-    logLevel: 'warn' # Default: 'none'
+    // What kind of level of logs the lib should display. Values: 'none', 'error', 'warn', 'info', 'debug'
+    logLevel: 'warn' // Default: 'none'
 })
 ```
 
@@ -118,21 +117,21 @@ stats.on('eventName', (ev) => {
 
 ```js
 {
-    # The event name. Usually the method called (addTrack, createAnswer)
-    event: '', 
-    # The tag for this event. `stats`, `sdp`, `getUserMedia`, etc
+    // The event name. Usually the method called (addTrack, createAnswer)
+    event: '',
+    // The tag for this event. `stats`, `sdp`, `getUserMedia`, etc
     tag: '',
-    # The id for the peer that fired this event
+    // The id for the peer that fired this event
     peerId: '',
-    # A timestamp for when the event happened
+    // A timestamp for when the event happened
     timestamp: '',
-    # Data for each event type
+    // Data for each event type
     data: {},
     
-    # The following attrs appear at certain times
-    # The error that appeared in the method we were watching
+    // The following attrs appear at certain times
+    // The error that appeared in the method we were watching
     error: {},
-    # These appear on the `stats` event
+    // These appear on the `stats` event
     rawStats: {},
     statsObject: {},
     filteredStats: {}
@@ -156,7 +155,7 @@ MIT
 
 ## Sponsorship
 Platform testing is generously offered by BrowserStack
-<br>
+
 <a href="https://www.browserstack.com/" target="_blank" >
-    <img src="https://user-images.githubusercontent.com/1862405/64006512-2b265a00-cb1b-11e9-9e28-d8afb305315a.png" alt="Browserstack" width="300">
+    <img src="https://user-images.githubusercontent.com/1862405/64006512-2b265a00-cb1b-11e9-9e28-d8afb305315a.png" alt="Browserstack" width="200">
 </a>

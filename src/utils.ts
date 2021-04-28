@@ -125,19 +125,12 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
   }
 
   for (const report of stats.values()) {
-    // TODO remove duplicate code remote vs local rtp. Only the place where we save is different.
     switch (report.type) {
       case 'outbound-rtp': {
         let outbound = {}
         const mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
         if (!['audio', 'video'].includes(mediaType)) continue
-
-        if (report.remoteId) {
-          outbound = stats.get(report.remoteId)
-        } else if (report.trackId) {
-          outbound = stats.get(report.trackId)
-        }
 
         if (report.codecId) {
           const codec = stats.get(report.codecId)
@@ -148,7 +141,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           }
         }
 
-        statsObject[mediaType].outbound.push({...report, ...outbound, ...codecInfo})
+        statsObject[mediaType].outbound.push({...report, ...codecInfo})
         break
       }
       case 'inbound-rtp': {
@@ -161,12 +154,6 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           if (report.id.includes('Video')) mediaType = 'video'
           else if (report.id.includes('Audio')) mediaType = 'audio'
           else continue
-        }
-
-        if (report.remoteId) {
-          inbound = stats.get(report.remoteId)
-        } else if (report.trackId) {
-          inbound = stats.get(report.trackId)
         }
 
         if (report.codecId) {
@@ -189,7 +176,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           }
         }
 
-        statsObject[mediaType].inbound.push({...report, ...inbound, ...codecInfo})
+        statsObject[mediaType].inbound.push({...report, ...codecInfo})
         break
       }
       case 'peer-connection': {
@@ -209,14 +196,6 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           else if (report.id.includes('Audio')) mediaType = 'audio'
           else continue
         }
-        // TODO any reason to leave this here?
-        // statsObject[mediaType].remote = report
-
-        if (report.remoteId) {
-          inbound = stats.get(report.remoteId)
-        } else if (report.trackId) {
-          inbound = stats.get(report.trackId)
-        }
 
         if (report.codecId) {
           const codec = stats.get(report.codecId)
@@ -238,7 +217,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           }
         }
 
-        statsObject.remote[mediaType].inbound.push({...report, ...inbound, ...codecInfo})
+        statsObject.remote[mediaType].inbound.push({...report, ...codecInfo})
         break
       }
       case 'remote-outbound-rtp': {
@@ -247,15 +226,6 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
         const mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
         if (!['audio', 'video'].includes(mediaType)) continue
-
-        // TODO why set here if it's set at the end?
-        // statsObject[mediaType].outbound[report.id] = report
-
-        if (report.remoteId) {
-          outbound = stats.get(report.remoteId)
-        } else if (report.trackId) {
-          outbound = stats.get(report.trackId)
-        }
 
         if (report.codecId) {
           const codec = stats.get(report.codecId)
@@ -266,7 +236,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           }
         }
 
-        statsObject.remote[mediaType].outbound.push({...report, ...outbound, ...codecInfo})
+        statsObject.remote[mediaType].outbound.push({...report, ...codecInfo})
         break
       }
       default:

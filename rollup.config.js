@@ -17,7 +17,7 @@ export default [{
   input: 'src/index.ts',
   output: [
     {
-      file: pkg.browser,
+      file: 'dist/browser.js',
       name: 'window',
       format: 'iife',
       extend: true
