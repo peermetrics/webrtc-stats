@@ -34,7 +34,7 @@ export interface TimelineEvent {
 
 }
 
-export interface AddPeerOptions {
+export interface AddConnectionOptions {
     pc: RTCPeerConnection
     peerId: string
     remote?: boolean
@@ -54,7 +54,7 @@ export interface MonitoredPeer {
 }
 
 export interface MonitoredPeersObject {
-    [index: string]: MonitoredPeer
+    [index: string]: MonitoredPeer[]
 }
 
 export interface TrackReport extends RTCStats {

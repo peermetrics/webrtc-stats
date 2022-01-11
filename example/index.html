@@ -85,7 +85,7 @@
         pc1 = new RTCPeerConnection(configuration);
         pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
 
-        stats.addPeer({
+        stats.addConnection({
           pc: pc1,
           peerId: '1'
         })
