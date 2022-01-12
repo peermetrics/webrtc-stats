@@ -119,7 +119,7 @@ export class WebRTCStats extends EventEmitter {
 
         // remove an connection if it's already closed.
         if(peerConnection.pc.connectionState === 'closed') {
-          this.removeCoonection(peerId, peerConnection.pc)
+          this.removeConnection(peerId, peerConnection.pc)
         }
       }
     }
@@ -689,7 +689,7 @@ export class WebRTCStats extends EventEmitter {
    * @param {string} id                The peer id
    * @param {RTCPeerConnection} pc     The peer connection
    */
-  public removeCoonection (id: string, pc: RTCPeerConnection) {
+  public removeConnection (id: string, pc: RTCPeerConnection) {
     if (id in this.peersToMonitor) {
       const index = this.peersToMonitor[id].findIndex((peerObject) => peerObject.pc === pc)
       if (index > 0) {
