@@ -37,10 +37,10 @@ webrtcStats.on('stats', (ev) => {
     console.log('stats', ev)
 })
 ```
-Use `addPeer` to add peers to the list of monitored peers:
+Use `addConnection` to add connections to the list of monitored peers:
 ```js
 let pc1 = new RTCPeerConnection({...})
-webrtcStats.addPeer({
+webrtcStats.addConnection({
     pc: pc1,
     peerId: '1' // any string that helps you identify this peer,
 	remote: false // optional, override the global remote flag
@@ -91,21 +91,34 @@ let stats = new WebRTCStats({
 ```
 
 ### API
-#### `.addPeer(options)`
-Adds a peer to the watch list.
+#### `.addConnection(options)`
+Adds a connection to the watch list.
 `options`
 
   - `pc`: the `RTCPeerConnection` instance
   - `peerId`: String a unique Id to identify this peer
 Monitoring of a peer will automatically end when the connection is closed.
 
+#### `.removeConnection(peerId, pc)`
+
+Removes the `RTCPeerConnection` from the list of watched connections for that peer.
+
+Arguments:
+
+- `peerId`: the peer id for which we want to remove the connection
+- `pc`: The `RTCPeerConnection` instance we want to remove
+
 #### `.removePeer(peerId)`
 
-Stop listening for events/stats for this peer
+Stop listening for events/stats on all connections for this peer
 
 #### `.getTimeline([filter])`
 Return the array of events from the timeline up to that point.
 If the optional `filter` string is present it will filter out events. Possible values: `peer`, `connection`, `track`, `stats`, `getUserMedia`
+
+#### `.addPeer(options)` - Deprecated
+
+This method is deprecated, please use `.addConnection()` instead
 
 ### Events
 The module uses `EventEmitter` to emit events. You can listen to them using `.on()`
