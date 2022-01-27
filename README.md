@@ -8,8 +8,8 @@ On top of that, it offers the `timeline` which is a list of all the events fired
 
 WebRTCStats extends `EventEmitter` and uses the same event system to communicate with the rest of the app.
 
-#### Migrating from v3
-To see the changes that appeared in V4 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v4.0.0)
+#### Migrating from v4
+To see the changes that appeared in V5 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v5.0.0)
 
 
 ## Install
@@ -41,9 +41,10 @@ Use `addConnection` to add connections to the list of monitored peers:
 ```js
 let pc1 = new RTCPeerConnection({...})
 webrtcStats.addConnection({
-    pc: pc1,
-    peerId: '1' // any string that helps you identify this peer,
-	remote: false // optional, override the global remote flag
+	pc: pc1, // RTCPeerConnection instance
+	peerId: '1', // any string that helps you identify this peer,
+    connectionId: '06d54adc-e478-4f95-9144-bbb3562a2aad', // optional, an id that you can use to keep track of this connection
+    remote: false // optional, override the global remote flag
 })
 ```
 Now every `5000` ms  WebRTCStats will fire the `stats` event which will come with the object:
@@ -97,16 +98,32 @@ Adds a connection to the watch list.
 
   - `pc`: the `RTCPeerConnection` instance
   - `peerId`: String a unique Id to identify this peer
-Monitoring of a peer will automatically end when the connection is closed.
+  Monitoring of a peer will automatically end when the connection is closed.
+  - `connectionId`: optional, string. A way to identify this connection. If a `connectionId` is not offered, the lib will assign a random one
 
-#### `.removeConnection(peerId, pc)`
+Returns:
+
+```js
+{
+    connectionId: '', // the ID assigned to this connection
+}
+```
+
+
+
+#### `.removeConnection(options)`
 
 Removes the `RTCPeerConnection` from the list of watched connections for that peer.
 
-Arguments:
+`options` object:
 
 - `peerId`: the peer id for which we want to remove the connection
+
 - `pc`: The `RTCPeerConnection` instance we want to remove
+
+  or
+
+- `connectionId`: the id of the connection (the one returned when calling `.addConnection()`)
 
 #### `.removePeer(peerId)`
 
@@ -116,7 +133,7 @@ Stop listening for events/stats on all connections for this peer
 Return the array of events from the timeline up to that point.
 If the optional `filter` string is present it will filter out events. Possible values: `peer`, `connection`, `track`, `stats`, `getUserMedia`
 
-#### `.addPeer(options)` - Deprecated
+#### `.addPeer(peerId, pc)` - Deprecated
 
 This method is deprecated, please use `.addConnection()` instead
 
