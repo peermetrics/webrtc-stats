@@ -1,3 +1,4 @@
+import { nodeResolve } from '@rollup/plugin-node-resolve'
 import typescript from '@rollup/plugin-typescript'
 
 import builtins from 'rollup-plugin-node-builtins'
@@ -9,6 +10,9 @@ import babelConfig from './.babelrc.json'
 
 const plugins = [
   builtins(),
+  nodeResolve({
+    browser: true
+  }),
   typescript(),
   babel(babelConfig)
 ]

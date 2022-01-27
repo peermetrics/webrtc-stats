@@ -27,6 +27,7 @@ export interface TimelineEvent {
     timestamp?: Date
     data?: any
     peerId?: string
+    connectionId?: string
     error?: any
     rawStats?: RTCStatsReport
     statsObject?: any
@@ -37,7 +38,12 @@ export interface TimelineEvent {
 export interface AddConnectionOptions {
     pc: RTCPeerConnection
     peerId: string
+    connectionId?: string
     remote?: boolean
+}
+
+export interface AddConnectionResponse {
+    connectionId: string
 }
 
 export interface GetUserMediaResponse {
@@ -46,15 +52,35 @@ export interface GetUserMediaResponse {
     error?: DOMError
 }
 
+export interface MonitorPeerOptions {
+    peerId: string
+    pc: RTCPeerConnection
+    connectionId?: string
+    remote?: boolean
+}
+
 export interface MonitoredPeer {
     pc: RTCPeerConnection
+    connectionId: string
     stream: MediaStream | null
     stats: any
-    options: MonitorPeerOptions
+    options: {
+        remote: boolean
+    }
+}
+
+interface MonitoredPeerCollection {
+    [index: string]: MonitoredPeer
 }
 
 export interface MonitoredPeersObject {
-    [index: string]: MonitoredPeer[]
+    [index: string]: MonitoredPeerCollection
+}
+
+export interface RemoveConnectionOptions {
+    peerId?: string
+    pc?: RTCPeerConnection
+    connectionId?: string
 }
 
 export interface TrackReport extends RTCStats {
@@ -80,10 +106,6 @@ export interface CodecInfo {
     clockRate: number
     mimeType: number
     payloadType: number
-}
-
-export interface MonitorPeerOptions {
-    remote: boolean
 }
 
 export interface ParseStatsOptions {

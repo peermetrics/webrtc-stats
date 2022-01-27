@@ -1,14 +1,21 @@
 import {EventEmitter} from 'events'
+import {v4 as uuid} from 'uuid'
+
 import {
   WebRTCStatsConstructorOptions,
   AddConnectionOptions,
+  AddConnectionResponse,
   MonitoredPeersObject,
+  RemoveConnectionOptions,
   TimelineEvent,
   TimelineTag,
   GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions, LogLevel
 } from './types/index'
 
 import {parseStats, map2obj} from './utils'
+
+// used to keep track of events listeners. useful when we want to remove them
+let eventListeners = {}
 
 export class WebRTCStats extends EventEmitter {
   private readonly isEdge: boolean
@@ -84,18 +91,21 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
-  public async addPeer (options: AddConnectionOptions): Promise<void> {
+  public async addPeer (peerId: string, pc: RTCPeerConnection): Promise<AddConnectionResponse> {
     console.warn('The addPeer() method has been deprecated, please use addConnection()')
-    return this.addConnection(options)
+    return this.addConnection({
+      peerId,
+      pc
+    })
   }
 
   /**
    * Start tracking a RTCPeerConnection
    * @param {Object} options The options object
    */
-  public async addConnection (options: AddConnectionOptions): Promise<void> {
+  public async addConnection (options: AddConnectionOptions): Promise<AddConnectionResponse> {
     const {pc, peerId} = options
-    let {remote} = options
+    let {connectionId, remote} = options
 
     remote = typeof remote === 'boolean' ? remote : this.remote
 
@@ -111,15 +121,22 @@ export class WebRTCStats extends EventEmitter {
       throw new Error('Can\'t monitor peers in Edge at this time.')
     }
 
+    // if we are already monitoring this peerId, check if the user sent the same connection twice
     if (this.peersToMonitor[peerId]) {
-      for (let peerConnection of this.peersToMonitor[peerId]) {
-        if (peerConnection.pc === pc) {
-          throw new Error(`We are already monitoring peer with id ${peerId}.`)
-        }
+      // if the user sent a connectionId
+      if (connectionId && connectionId in this.peersToMonitor[peerId]) {
+        throw new Error(`We are already monitoring connection with id ${connectionId}.`)
+      } else {
+        for (let id in this.peersToMonitor[peerId]) {
+          const peerConnection = this.peersToMonitor[peerId][id]
+          if (peerConnection.pc === pc) {
+            throw new Error(`We are already monitoring peer with id ${peerId}.`)
+          }
 
-        // remove an connection if it's already closed.
-        if(peerConnection.pc.connectionState === 'closed') {
-          this.removeConnection(peerId, peerConnection.pc)
+          // remove an connection if it's already closed.
+          if(peerConnection.pc.connectionState === 'closed') {
+            this.removeConnection({peerId, pc: peerConnection.pc})
+          }
         }
       }
     }
@@ -133,17 +150,32 @@ export class WebRTCStats extends EventEmitter {
       })
     }
 
+    // if the user didn't send a connectionId, we should generate one
+    if (!connectionId) {
+      connectionId = uuid()
+    }
+
     this.emitEvent({
       event: 'addConnection',
       tag: 'peer',
-      peerId: peerId,
+      peerId,
+      connectionId,
       data: {
         options: options,
         peerConfiguration: config
       }
     })
 
-    this.monitorPeer(peerId, pc, {remote})
+    this.monitorPeer({
+      peerId,
+      connectionId,
+      pc,
+      remote
+    })
+
+    return {
+      connectionId
+    }
   }
 
   /**
@@ -171,29 +203,41 @@ export class WebRTCStats extends EventEmitter {
    * @param  {RTCPeerConnection} pc
    * @param {MonitorPeerOptions} options
    */
-  private monitorPeer (peerId: string, pc: RTCPeerConnection, options: MonitorPeerOptions): void {
+  private monitorPeer (options: MonitorPeerOptions): void {
+    let {peerId, connectionId, pc, remote} = options
 
-    if (!pc) return
+    if (!pc) {
+      this.logger.warn('Did not receive pc argument when calling monitorPeer()')
+      return
+    }
 
     const monitorPeerObject = {
       pc: pc,
+      connectionId,
       stream: null,
       stats: {
         // keep a reference of the current stat
         parsed: null,
         raw: null
       },
-      options
+      options: {
+        remote
+      }
     }
 
     if (this.peersToMonitor[peerId]) {
-      this.peersToMonitor[peerId].push(monitorPeerObject)
+      // if we are already watching this connectionId
+      if (connectionId in this.peersToMonitor[peerId]) {
+        this.logger.warn(`Already watching connection with ID ${connectionId}`)
+        return
+      }
+
+      this.peersToMonitor[peerId][connectionId] = monitorPeerObject
     } else {
-      // keep this in an object to avoid duplicates
-      this.peersToMonitor[peerId] = [monitorPeerObject]
+      this.peersToMonitor[peerId] = {[connectionId]: monitorPeerObject}
     }
 
-    this.addPeerConnectionEventListeners(peerId, pc)
+    this.addPeerConnectionEventListeners(peerId, connectionId, pc)
 
     // start monitoring from the first peer added
     if (this.numberOfMonitoredPeers === 1) {
@@ -237,10 +281,11 @@ export class WebRTCStats extends EventEmitter {
 
     // if we want the stats for a specific peer
     if (id) {
-      peersToAnalyse[id] = this.peersToMonitor[id]
-      if (!peersToAnalyse[id]) {
+      if (!this.peersToMonitor[id]) {
         throw new Error(`Cannot get stats. Peer with id ${id} does not exist`)
       }
+
+      peersToAnalyse[id] = this.peersToMonitor[id]
     } else {
       // else, get stats for all of them
       peersToAnalyse = this.peersToMonitor
@@ -249,11 +294,12 @@ export class WebRTCStats extends EventEmitter {
     let statsEventList: TimelineEvent[] = []
 
     for (const id in peersToAnalyse) {
-      for (const peerObject of peersToAnalyse[id]) {
+      for (const connectionId in peersToAnalyse[id]) {
+        const peerObject = peersToAnalyse[id][connectionId]
         const pc = peerObject.pc
 
         // if this connection is closed, continue
-        if (!pc || this.isConnectionClosed(id, pc)) {
+        if (!pc || this.checkIfConnectionIsClosed(id, connectionId, pc)) {
           continue
         }
 
@@ -273,6 +319,7 @@ export class WebRTCStats extends EventEmitter {
               event: 'stats',
               tag: 'stats',
               peerId: id,
+              connectionId: connectionId,
               data: parsedStats
             } as TimelineEvent
 
@@ -310,30 +357,37 @@ export class WebRTCStats extends EventEmitter {
       }
 
       for (const id in this.peersToMonitor) {
-        for (const peerObject of this.peersToMonitor[id]) {
-          const pc = peerObject.pc
+        for (const connectionId in this.peersToMonitor[id]) {
+          const pc = this.peersToMonitor[id][connectionId].pc
 
-          this.isConnectionClosed(id, pc)
+          this.checkIfConnectionIsClosed(id, connectionId, pc)
         }
       }
     }, this.connectionMonitoringInterval)
   }
 
-  private isConnectionClosed (id: string, pc: RTCPeerConnection): boolean {
-    if (pc.connectionState === 'closed' || pc.iceConnectionState === 'closed') {
+  private checkIfConnectionIsClosed (peerId: string, connectionId: string, pc: RTCPeerConnection): boolean {
+    const isClosed = this.isConnectionClosed(pc)
+
+    if (isClosed) {
+      this.removeConnection({peerId, pc})
+
       // event name should be deppending on what we detect as closed
       let event = pc.connectionState === 'closed' ? 'onconnectionstatechange' : 'oniceconnectionstatechange'
       this.emitEvent({
         event,
+        peerId,
+        connectionId,
         tag: 'connection',
-        peerId: id,
         data: 'closed'
       })
-      this.removePeer(id)
-      return true
     }
 
-    return false
+    return isClosed
+  }
+
+  private isConnectionClosed (pc: RTCPeerConnection): boolean {
+    return pc.connectionState === 'closed' || pc.iceConnectionState === 'closed'
   }
 
   private stopConnectionStateMonitoring(): void {
@@ -392,34 +446,34 @@ export class WebRTCStats extends EventEmitter {
 
   private get peerConnectionListeners () {
     return {
-      icecandidate: (id, pc, e) => {
+      icecandidate: (id, connectionId, pc, e) => {
         this.logger.debug('[pc-event] icecandidate | peerId: ${peerId}', e)
 
         this.emitEvent({
           event: 'onicecandidate',
           tag: 'connection',
           peerId: id,
+          connectionId,
           data: e.candidate
         })
       },
-      track: (id, pc, e) => {
+      track: (id, connectionId, pc, e) => {
         this.logger.debug(`[pc-event] track | peerId: ${id}`, e)
 
         const track = e.track
         const stream = e.streams[0]
 
         // save the remote stream
-        this.peersToMonitor[id].forEach((peerObject) => {
-          if (peerObject.pc === pc) {
-            peerObject.stream = stream
-          }
-        })
+        if (id in this.peersToMonitor && connectionId in this.peersToMonitor[id]) {
+          this.peersToMonitor[id][connectionId].stream = stream
+        }
 
         this.addTrackEventListeners(track)
         this.emitEvent({
           event: 'ontrack',
           tag: 'track',
           peerId: id,
+          connectionId,
           data: {
             stream: stream ? this.getStreamDetails(stream) : null,
             track: track ? this.getMediaTrackDetails(track) : null,
@@ -429,12 +483,13 @@ export class WebRTCStats extends EventEmitter {
           }
         })
       },
-      signalingstatechange: (id, pc) => {
+      signalingstatechange: (id, connectionId, pc) => {
         this.logger.debug(`[pc-event] signalingstatechange | peerId: ${id}`)
         this.emitEvent({
           event: 'onsignalingstatechange',
           tag: 'connection',
           peerId: id,
+          connectionId,
           data: {
             signalingState: pc.signalingState,
             localDescription: pc.localDescription,
@@ -442,72 +497,77 @@ export class WebRTCStats extends EventEmitter {
           }
         })
       },
-      iceconnectionstatechange: (id, pc) => {
+      iceconnectionstatechange: (id, connectionId, pc) => {
         this.logger.debug(`[pc-event] iceconnectionstatechange | peerId: ${id}`)
         this.emitEvent({
           event: 'oniceconnectionstatechange',
           tag: 'connection',
           peerId: id,
+          connectionId,
           data: pc.iceConnectionState
         })
       },
-      icegatheringstatechange: (id, pc) => {
+      icegatheringstatechange: (id, connectionId, pc) => {
         this.logger.debug(`[pc-event] icegatheringstatechange | peerId: ${id}`)
         this.emitEvent({
           event: 'onicegatheringstatechange',
           tag: 'connection',
           peerId: id,
+          connectionId,
           data: pc.iceGatheringState
         })
       },
-      icecandidateerror: (id, pc, ev) => {
+      icecandidateerror: (id, connectionId, pc, ev) => {
         this.logger.debug(`[pc-event] icecandidateerror | peerId: ${id}`)
         this.emitEvent({
           event: 'onicecandidateerror',
           tag: 'connection',
           peerId: id,
+          connectionId,
           error: {
             errorCode: ev.errorCode
           }
         })
       },
-      connectionstatechange: (id, pc) => {
+      connectionstatechange: (id, connectionId, pc) => {
         this.logger.debug(`[pc-event] connectionstatechange | peerId: ${id}`)
         this.emitEvent({
           event: 'onconnectionstatechange',
           tag: 'connection',
           peerId: id,
+          connectionId,
           data: pc.connectionState
         })
       },
-      negotiationneeded: (id, pc) => {
+      negotiationneeded: (id, connectionId, pc) => {
         this.logger.debug(`[pc-event] negotiationneeded | peerId: ${id}`)
         this.emitEvent({
           event: 'onnegotiationneeded',
           tag: 'connection',
-          peerId: id
+          peerId: id,
+          connectionId
         })
       },
-      datachannel: (id, pc, event) => {
+      datachannel: (id, connectionId, pc, event) => {
         this.logger.debug(`[pc-event] datachannel | peerId: ${id}`, event)
         this.emitEvent({
           event: 'ondatachannel',
           tag: 'datachannel',
           peerId: id,
+          connectionId,
           data: event.channel
         })
       }
     }
   }
 
-  private addPeerConnectionEventListeners (peerId: string, pc: RTCPeerConnection): void {
-    const id = peerId
+  private addPeerConnectionEventListeners (peerId: string, connectionId: string, pc: RTCPeerConnection): void {
+    this.logger.debug(`Adding event listeners for peer ${peerId} and connection ${connectionId}.`)
 
-    this.logger.info(`Adding new peer with ID ${peerId}.`)
-    this.logger.debug(`Newly added PeerConnection`, pc)
-
+    eventListeners[connectionId] = {}
     Object.keys(this.peerConnectionListeners).forEach(eventName => {
-      pc.addEventListener(eventName, this.peerConnectionListeners[eventName].bind(this, id, pc), false)
+      eventListeners[connectionId][eventName] = this.peerConnectionListeners[eventName].bind(this, peerId, connectionId, pc)
+      pc.addEventListener(eventName, eventListeners[connectionId][eventName], false)
     })
   }
 
@@ -570,48 +630,67 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
+  private get getTrackEventObject () {
+    return {
+      'mute': (ev) => {
+        this.emitEvent({
+          event: 'mute',
+          tag: 'track',
+          data: {
+            event: ev
+          }
+        })
+      },
+      'unmute': (ev) => {
+        this.emitEvent({
+          event: 'unmute',
+          tag: 'track',
+          data: {
+            event: ev
+          }
+        })
+      },
+      'overconstrained': (ev) => {
+        this.emitEvent({
+          event: 'overconstrained',
+          tag: 'track',
+          data: {
+            event: ev
+          }
+        })
+      },
+      'ended': (ev) => {
+        this.emitEvent({
+          event: 'ended',
+          tag: 'track',
+          data: {
+            event: ev
+          }
+        })
+      }
+    }
+  }
+
   /**
    * Add event listeners for the tracks that are added to the stream
    * @param {MediaStreamTrack} track
    */
   private addTrackEventListeners (track: MediaStreamTrack) {
-    track.addEventListener('mute', (ev) => {
-      this.emitEvent({
-        event: 'mute',
-        tag: 'track',
-        data: {
-          event: ev
-        }
-      })
+    eventListeners[track.id] = {}
+    Object.keys(this.getTrackEventObject).forEach(eventName => {
+      eventListeners[track.id][eventName] = this.getTrackEventObject[eventName].bind(this)
+      track.addEventListener(eventName, eventListeners[track.id][eventName])
     })
-    track.addEventListener('unmute', (ev) => {
-      this.emitEvent({
-        event: 'unmute',
-        tag: 'track',
-        data: {
-          event: ev
-        }
-      })
-    })
-    track.addEventListener('overconstrained', (ev) => {
-      this.emitEvent({
-        event: 'overconstrained',
-        tag: 'track',
-        data: {
-          event: ev
-        }
-      })
-    })
+  }
 
-    track.addEventListener('ended', (ev) => {
-      this.emitEvent({
-        event: 'ended',
-        tag: 'track',
-        data: {
-          event: ev
-        }
+  private removeTrackEventListeners (track: MediaStreamTrack) {
+    if (track.id in eventListeners)  {
+      Object.keys(this.getTrackEventObject).forEach(eventName => {
+        track.removeEventListener(eventName, eventListeners[track.id][eventName])
       })
-    })
+
+      delete eventListeners[track.id]
+    }
   }
 
   private addToTimeline (event: TimelineEvent) {
@@ -686,19 +765,49 @@ export class WebRTCStats extends EventEmitter {
 
   /**
    * Removes a connection from the list of connections to watch
-   * @param {string} id                The peer id
-   * @param {RTCPeerConnection} pc     The peer connection
+   * @param {RemoveConnectionOptions} options The options object for this method
    */
-  public removeConnection (id: string, pc: RTCPeerConnection) {
-    if (id in this.peersToMonitor) {
-      const index = this.peersToMonitor[id].findIndex((peerObject) => peerObject.pc === pc)
-      if (index > 0) {
-        this.peersToMonitor[id].splice(index, 1)
+  public removeConnection (options: RemoveConnectionOptions) {
+    let {peerId, connectionId, pc} = options
+
+    if (!peerId && !pc && !connectionId) {
+      throw new Error('Missing arguments. You need to either send a peerId and pc, or a connectionId.')
+    }
+
+    if ((peerId && !pc) || (pc && !peerId)) {
+      throw new Error('By not sending a connectionId, you need to send a peerId and a pc (RTCPeerConnection instance)')
+    }
+
+    // if the user sent a connectionId, use that
+    if (connectionId) {
+      for (let pId in this.peersToMonitor) {
+        if (connectionId in this.peersToMonitor[pId]) {
+          peerId = pId
+
+          // remove listeners
+          this.removePeerConnectionEventListeners(peerId, connectionId, pc)
+          delete this.peersToMonitor[pId][connectionId]
+        }
+      }
+      // else, if the user sent a peerId and pc
+    } else if (peerId && pc) {
+      // check if we have this peerId
+      if (peerId in this.peersToMonitor) {
+        // loop through all connections
+        for (let connectionId in this.peersToMonitor[peerId]) {
+          // until we find the one we're searching for
+          if (this.peersToMonitor[peerId][connectionId].pc === pc) {
+            // remove listeners
+            this.removePeerConnectionEventListeners(peerId, connectionId, pc)
+            // delete it
+            delete this.peersToMonitor[peerId][connectionId]
+          }
+        }
       }
     }
 
-    if (this.peersToMonitor[id].length === 0) {
-      delete this.peersToMonitor[id]
+    if (Object.values(this.peersToMonitor[peerId]).length === 0) {
+      delete this.peersToMonitor[peerId]
     }
   }
 
@@ -710,14 +819,11 @@ export class WebRTCStats extends EventEmitter {
     this.logger.info(`Removing PeerConnection with id ${id}.`)
     if (!this.peersToMonitor[id]) return
 
-    this.peersToMonitor[id].forEach((peerObject) => {
-      let pc = peerObject.pc
+    for (let connectionId in this.peersToMonitor[id]) {
+      let pc = this.peersToMonitor[id][connectionId].pc
 
-      // remove all PeerConnection listeners
-      Object.keys(this.peerConnectionListeners).forEach(eventName => {
-        pc.removeEventListener(eventName, this.peerConnectionListeners[eventName].bind(this, id, pc), false)
-      })
-    })
+      this.removePeerConnectionEventListeners(id, connectionId, pc)
+    }
 
     // remove from peersToMonitor
     delete this.peersToMonitor[id]
@@ -729,6 +835,31 @@ export class WebRTCStats extends EventEmitter {
    */
   private get numberOfMonitoredPeers (): number {
     return Object.keys(this.peersToMonitor).length
+  }
+
+  private removePeerConnectionEventListeners(peerId: string, connectionId: string, pc: RTCPeerConnection) {
+    if (connectionId in eventListeners) {
+      // remove all PeerConnection listeners
+      Object.keys(this.peerConnectionListeners).forEach(eventName => {
+        pc.removeEventListener(eventName, eventListeners[connectionId][eventName], false)
+      })
+
+      // remove reference for this connection
+      delete eventListeners[connectionId]
+    }
+
+    // also remove track listeners
+    pc.getSenders().forEach(sender => {
+      if (sender.track) {
+        this.removeTrackEventListeners(sender.track)
+      }
+    })
+
+    pc.getReceivers().forEach(receiver => {
+      if (receiver.track) {
+        this.removeTrackEventListeners(receiver.track)
+      }
+    })
   }
 
   // TODO
