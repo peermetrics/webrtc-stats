@@ -83,6 +83,10 @@ export interface RemoveConnectionOptions {
     connectionId?: string
 }
 
+export interface RemoveConnectionReturn {
+    connectionId: string
+}
+
 export interface TrackReport extends RTCStats {
     bitrate?: number
     packetRate?: number

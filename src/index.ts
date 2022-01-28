@@ -1,12 +1,13 @@
 import {EventEmitter} from 'events'
 import {v4 as uuid} from 'uuid'
 
-import {
+import type {
   WebRTCStatsConstructorOptions,
   AddConnectionOptions,
   AddConnectionResponse,
   MonitoredPeersObject,
   RemoveConnectionOptions,
+  RemoveConnectionReturn,
   TimelineEvent,
   TimelineTag,
   GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions, LogLevel
@@ -767,7 +768,7 @@ export class WebRTCStats extends EventEmitter {
    * Removes a connection from the list of connections to watch
    * @param {RemoveConnectionOptions} options The options object for this method
    */
-  public removeConnection (options: RemoveConnectionOptions) {
+  public removeConnection (options: RemoveConnectionOptions): RemoveConnectionReturn {
     let {peerId, connectionId, pc} = options
 
     if (!peerId && !pc && !connectionId) {
@@ -794,13 +795,15 @@ export class WebRTCStats extends EventEmitter {
       // check if we have this peerId
       if (peerId in this.peersToMonitor) {
         // loop through all connections
-        for (let connectionId in this.peersToMonitor[peerId]) {
+        for (let cId in this.peersToMonitor[peerId]) {
           // until we find the one we're searching for
-          if (this.peersToMonitor[peerId][connectionId].pc === pc) {
+          if (this.peersToMonitor[peerId][cId].pc === pc) {
             // remove listeners
-            this.removePeerConnectionEventListeners(peerId, connectionId, pc)
+            this.removePeerConnectionEventListeners(peerId, cId, pc)
             // delete it
-            delete this.peersToMonitor[peerId][connectionId]
+            delete this.peersToMonitor[peerId][cId]
+
+            connectionId = cId
           }
         }
       }
@@ -808,6 +811,10 @@ export class WebRTCStats extends EventEmitter {
 
     if (Object.values(this.peersToMonitor[peerId]).length === 0) {
       delete this.peersToMonitor[peerId]
+    }
+
+    return {
+      connectionId
     }
   }
 
