@@ -29,10 +29,19 @@ export interface TimelineEvent {
     peerId?: string
     connectionId?: string
     error?: any
+}
+
+export interface StatsEvent {
+    event: string
+    tag: TimelineTag
+    timestamp?: Date
+    data: any
+    peerId: string
+    connectionId: string
+    timeTaken: number
     rawStats?: RTCStatsReport
     statsObject?: any
     filteredStats?: any
-
 }
 
 export interface AddConnectionOptions {

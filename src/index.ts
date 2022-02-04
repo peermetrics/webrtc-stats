@@ -9,6 +9,7 @@ import type {
   RemoveConnectionOptions,
   RemoveConnectionReturn,
   TimelineEvent,
+  StatsEvent,
   TimelineTag,
   GetUserMediaResponse, MonitorPeerOptions, ParseStatsOptions, LogLevel
 } from './types/index'
@@ -260,8 +261,8 @@ export class WebRTCStats extends EventEmitter {
       }
 
       this.getStats() // get stats from all peer connections
-        .then((statsEvents: TimelineEvent[]) => {
-          statsEvents.forEach((statsEventObject: TimelineEvent) => {
+        .then((statsEvents) => {
+          statsEvents.forEach((statsEventObject) => {
             // add it to the timeline and also emit the stats event
             this.emitEvent(statsEventObject)
           })
@@ -276,7 +277,7 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
-  private async getStats (id: string = null): Promise<TimelineEvent[]> {
+  private async getStats (id: string = null): Promise<StatsEvent[]> {
     this.logger.info(id ? `Getting stats from peer ${id}` : `Getting stats from all peers`)
     let peersToAnalyse: MonitoredPeersObject = {}
 
@@ -292,7 +293,7 @@ export class WebRTCStats extends EventEmitter {
       peersToAnalyse = this.peersToMonitor
     }
 
-    let statsEventList: TimelineEvent[] = []
+    let statsEventList: StatsEvent[] = []
 
     for (const id in peersToAnalyse) {
       for (const connectionId in peersToAnalyse[id]) {
@@ -305,10 +306,13 @@ export class WebRTCStats extends EventEmitter {
         }
 
         try {
+          const before = this.getTimestamp()
           const prom = pc.getStats(null)
           if (prom) {
             // TODO modify the promise to yield responses over time
             const res = await prom
+            const after = this.getTimestamp()
+
             // create an object from the RTCStats map
             const statsObject = map2obj(res)
 
@@ -321,8 +325,9 @@ export class WebRTCStats extends EventEmitter {
               tag: 'stats',
               peerId: id,
               connectionId: connectionId,
+              timeTaken: after - before,
               data: parsedStats
-            } as TimelineEvent
+            } as StatsEvent
 
             if (this.rawStats === true) {
               statsEventObject['rawStats'] = res
@@ -668,6 +673,9 @@ export class WebRTCStats extends EventEmitter {
             event: ev
           }
         })
+
+        // no need to listen for event on this track
+        this.removeTrackEventListeners(ev.target)
       }
     }
   }
@@ -682,6 +690,15 @@ export class WebRTCStats extends EventEmitter {
       eventListeners[track.id][eventName] = this.getTrackEventObject[eventName].bind(this)
       track.addEventListener(eventName, eventListeners[track.id][eventName])
     })
+
+    // check once per second if the track has been stopped
+    // calling .stop() does not fire any events
+    eventListeners[track.id]['readyState'] = setInterval(() => {
+      if (track.readyState === 'ended') {
+        let event = new CustomEvent('ended', {detail: {check: 'readyState'}})
+        track.dispatchEvent(event)
+      }
+    }, 1000)
   }
 
   private removeTrackEventListeners (track: MediaStreamTrack) {
@@ -690,6 +707,7 @@ export class WebRTCStats extends EventEmitter {
         track.removeEventListener(eventName, eventListeners[track.id][eventName])
       })
 
+      clearInterval(eventListeners[track.id]['readyState'])
       delete eventListeners[track.id]
     }
   }
@@ -704,7 +722,7 @@ export class WebRTCStats extends EventEmitter {
    * @param {String} eventName The name of the custome event: track, getUserMedia, stats, etc
    * @param {Object} options   The object tha will be sent with the event
    */
-  private emitEvent (event: TimelineEvent) {
+  private emitEvent (event: TimelineEvent | StatsEvent) {
     const ev = {
       ...event,
       timestamp: new Date()
@@ -867,6 +885,14 @@ export class WebRTCStats extends EventEmitter {
         this.removeTrackEventListeners(receiver.track)
       }
     })
+  }
+
+  /**
+   * Used to get a now timestamp
+   * @return {number}
+   */
+  private getTimestamp(): number {
+    return Date.now()
   }
 
   // TODO
