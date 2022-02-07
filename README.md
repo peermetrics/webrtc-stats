@@ -55,6 +55,7 @@ Now every `5000` ms  WebRTCStats will fire the `stats` event which will come wit
     peerId: '1',
     timestamp: 'Sun Mar 22 2020 18:02:02', // a timestamp when this was fired
     data: {...}, // an object created after parsing the stats
+    timeTaken: 5, // how many ms the .getStats() call took
     rawStats: RTCStatsReport, // the actual RTCStatsReport results from `getStats()`
     statsObject: {}, // an object created from RTCStatsReport that uses the `id` for each report as a key
     filteredStats: {}, // same as statsObject but with some report types filtered out (eg: `codec`, `certificate`)
@@ -98,7 +99,7 @@ Adds a connection to the watch list.
 
   - `pc`: the `RTCPeerConnection` instance
   - `peerId`: String a unique Id to identify this peer
-  Monitoring of a peer will automatically end when the connection is closed.
+    Monitoring of a peer will automatically end when the connection is closed.
   - `connectionId`: optional, string. A way to identify this connection. If a `connectionId` is not offered, the lib will assign a random one
 
 Returns:
