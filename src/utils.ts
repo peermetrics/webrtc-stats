@@ -130,6 +130,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
         let outbound = {}
         const mediaType = report.mediaType || report.kind
         const codecInfo = {} as CodecInfo
+        let trackData = {}
         if (!['audio', 'video'].includes(mediaType)) continue
 
         if (report.codecId) {
@@ -141,12 +142,15 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           }
         }
 
-        statsObject[mediaType].outbound.push({...report, ...codecInfo})
+        trackData = stats.get(report.mediaSourceId) || stats.get(report.trackId) || {}
+
+        statsObject[mediaType].outbound.push({...report, ...codecInfo, track: {...trackData}})
         break
       }
       case 'inbound-rtp': {
         let inbound = {}
         let mediaType = report.mediaType || report.kind
+        let trackData = {}
         const codecInfo = {} as CodecInfo
 
         // Safari is missing mediaType and kind for 'inbound-rtp'
@@ -176,7 +180,9 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
           }
         }
 
-        statsObject[mediaType].inbound.push({...report, ...codecInfo})
+        trackData = stats.get(report.mediaSourceId) || stats.get(report.trackId) || {}
+
+        statsObject[mediaType].inbound.push({...report, ...codecInfo, track: {...trackData}})
         break
       }
       case 'peer-connection': {
