@@ -1,5 +1,7 @@
 # WebRTCStats
 
+<img src="https://img.shields.io/npm/v/@peermetrics/webrtc-stats">
+
 WebRTCStats is the most complete utility belt that helps with everything related to getting and parsing the stats for WebRTC `PeerConnection`s.
 
 The main advantage of WebRTCStats is that it parses and groups the stats from `PeerConnection`s and offers them in a easy to read way
@@ -41,9 +43,9 @@ Use `addConnection` to add connections to the list of monitored peers:
 ```js
 let pc1 = new RTCPeerConnection({...})
 webrtcStats.addConnection({
-	pc: pc1, // RTCPeerConnection instance
-	peerId: '1', // any string that helps you identify this peer,
-    connectionId: '06d54adc-e478-4f95-9144-bbb3562a2aad', // optional, an id that you can use to keep track of this connection
+    pc: pc1, // RTCPeerConnection instance
+    peerId: '1', // any string that helps you identify this peer,
+   	connectionId: '06d54adc-e478-4f95-9144-bbb3562a2aad', // optional, an id that you can use to keep track of this connection
     remote: false // optional, override the global remote flag
 })
 ```
@@ -183,10 +185,3 @@ The tags for the events fired by `WebRTCStats` are:
 
 ## License
 MIT
-
-## Sponsorship
-Platform testing is generously offered by BrowserStack
-
-<a href="https://www.browserstack.com/" target="_blank" >
-    <img src="https://user-images.githubusercontent.com/1862405/64006512-2b265a00-cb1b-11e9-9e28-d8afb305315a.png" alt="Browserstack" width="200">
-</a>
