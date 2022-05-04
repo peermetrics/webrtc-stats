@@ -802,6 +802,7 @@ export class WebRTCStats extends EventEmitter {
       for (let pId in this.peersToMonitor) {
         if (connectionId in this.peersToMonitor[pId]) {
           peerId = pId
+          pc = this.peersToMonitor[pId][connectionId].pc
 
           // remove listeners
           this.removePeerConnectionEventListeners(peerId, connectionId, pc)
