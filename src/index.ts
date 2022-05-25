@@ -137,7 +137,7 @@ export class WebRTCStats extends EventEmitter {
 
           // remove an connection if it's already closed.
           if(peerConnection.pc.connectionState === 'closed') {
-            this.removeConnection({peerId, pc: peerConnection.pc})
+            this.removeConnection({pc: peerConnection.pc})
           }
         }
       }
@@ -376,7 +376,7 @@ export class WebRTCStats extends EventEmitter {
     const isClosed = this.isConnectionClosed(pc)
 
     if (isClosed) {
-      this.removeConnection({peerId, pc})
+      this.removeConnection({pc})
 
       // event name should be deppending on what we detect as closed
       let event = pc.connectionState === 'closed' ? 'onconnectionstatechange' : 'oniceconnectionstatechange'
@@ -787,47 +787,56 @@ export class WebRTCStats extends EventEmitter {
    * @param {RemoveConnectionOptions} options The options object for this method
    */
   public removeConnection (options: RemoveConnectionOptions): RemoveConnectionReturn {
-    let {peerId, connectionId, pc} = options
+    let {connectionId, pc} = options
 
-    if (!peerId && !pc && !connectionId) {
-      throw new Error('Missing arguments. You need to either send a peerId and pc, or a connectionId.')
+    let peerId
+
+    if (!pc && !connectionId) {
+      throw new Error('Missing arguments. You need to either send pc or a connectionId.')
     }
 
-    if ((peerId && !pc) || (pc && !peerId)) {
-      throw new Error('By not sending a connectionId, you need to send a peerId and a pc (RTCPeerConnection instance)')
-    }
-
-    // if the user sent a connectionId, use that
+    // if the user sent a connectionId
     if (connectionId) {
+      if (typeof connectionId !== 'string') {
+        throw new Error('connectionId must be a string.')
+      }
+
       for (let pId in this.peersToMonitor) {
         if (connectionId in this.peersToMonitor[pId]) {
-          peerId = pId
           pc = this.peersToMonitor[pId][connectionId].pc
-
-          // remove listeners
-          this.removePeerConnectionEventListeners(peerId, connectionId, pc)
-          delete this.peersToMonitor[pId][connectionId]
+          peerId = pId
         }
       }
-      // else, if the user sent a peerId and pc
-    } else if (peerId && pc) {
-      // check if we have this peerId
-      if (peerId in this.peersToMonitor) {
-        // loop through all connections
-        for (let cId in this.peersToMonitor[peerId]) {
-          // until we find the one we're searching for
-          if (this.peersToMonitor[peerId][cId].pc === pc) {
-            // remove listeners
-            this.removePeerConnectionEventListeners(peerId, cId, pc)
-            // delete it
-            delete this.peersToMonitor[peerId][cId]
 
+    // else, if the user sent a pc
+    } else if (pc) {
+      if (!(pc instanceof RTCPeerConnection)) {
+        throw new Error('pc must be an instance of RTCPeerConnection.')
+      }
+
+      // loop through all the peers
+      for (let pId in this.peersToMonitor) {
+        // loop through all the connections
+        for (let cId in this.peersToMonitor[pId]) {
+          // until we find the one we're searching for
+          if (this.peersToMonitor[pId][cId].pc === pc) {
             connectionId = cId
+            peerId = pId
           }
         }
       }
     }
 
+    if (!pc || !connectionId) {
+      throw new Error('Could not find the desired connection.')
+    }
+
+    // remove listeners
+    this.removePeerConnectionEventListeners(connectionId, pc)
+    // delete it
+    delete this.peersToMonitor[peerId][connectionId]
+
+    // check if the user has no more connections
     if (Object.values(this.peersToMonitor[peerId]).length === 0) {
       delete this.peersToMonitor[peerId]
     }
@@ -848,7 +857,7 @@ export class WebRTCStats extends EventEmitter {
     for (let connectionId in this.peersToMonitor[id]) {
       let pc = this.peersToMonitor[id][connectionId].pc
 
-      this.removePeerConnectionEventListeners(id, connectionId, pc)
+      this.removePeerConnectionEventListeners(connectionId, pc)
     }
 
     // remove from peersToMonitor
@@ -863,7 +872,7 @@ export class WebRTCStats extends EventEmitter {
     return Object.keys(this.peersToMonitor).length
   }
 
-  private removePeerConnectionEventListeners(peerId: string, connectionId: string, pc: RTCPeerConnection) {
+  private removePeerConnectionEventListeners(connectionId: string, pc: RTCPeerConnection) {
     if (connectionId in eventListeners) {
       // remove all PeerConnection listeners
       Object.keys(this.peerConnectionListeners).forEach(eventName => {

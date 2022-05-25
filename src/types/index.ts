@@ -87,7 +87,6 @@ export interface MonitoredPeersObject {
 }
 
 export interface RemoveConnectionOptions {
-    peerId?: string
     pc?: RTCPeerConnection
     connectionId?: string
 }
