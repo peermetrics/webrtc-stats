@@ -474,7 +474,7 @@ export class WebRTCStats extends EventEmitter {
           this.peersToMonitor[id][connectionId].stream = stream
         }
 
-        this.addTrackEventListeners(track)
+        this.addTrackEventListeners(track, connectionId)
         this.emitEvent({
           event: 'ontrack',
           tag: 'track',
@@ -582,18 +582,25 @@ export class WebRTCStats extends EventEmitter {
    * @param  {Object} options
    */
   private parseGetUserMedia (options: GetUserMediaResponse) {
-    const obj = {
-      event: 'getUserMedia',
-      tag: 'getUserMedia',
-      data: {...options}
-    } as TimelineEvent
+    try {
+      const obj = {
+        event: 'getUserMedia',
+        tag: 'getUserMedia',
+        data: {...options}
+      } as TimelineEvent
 
-    // if we received the stream, get the details for the tracks
-    if (options.stream) {
-      obj.data.details = this.parseStream(options.stream)
-    }
+      // if we received the stream, get the details for the tracks
+      if (options.stream) {
+        obj.data.details = this.parseStream(options.stream)
 
-    this.emitEvent(obj)
+        // add event listeners for local tracks as well
+        options.stream.getTracks().map((track) => {
+          this.addTrackEventListeners(track)
+        })
+      }
+
+      this.emitEvent(obj)
+    } catch (e) {}
   }
 
   private parseStream (stream: MediaStream) {
@@ -636,12 +643,13 @@ export class WebRTCStats extends EventEmitter {
     }
   }
 
-  private get getTrackEventObject () {
+  private getTrackEventObject (connectionId?: string) {
     return {
       'mute': (ev) => {
         this.emitEvent({
           event: 'mute',
           tag: 'track',
+          connectionId,
           data: {
             event: ev
           }
@@ -651,6 +659,7 @@ export class WebRTCStats extends EventEmitter {
         this.emitEvent({
           event: 'unmute',
           tag: 'track',
+          connectionId,
           data: {
             event: ev
           }
@@ -660,6 +669,7 @@ export class WebRTCStats extends EventEmitter {
         this.emitEvent({
           event: 'overconstrained',
           tag: 'track',
+          connectionId,
           data: {
             event: ev
           }
@@ -669,12 +679,13 @@ export class WebRTCStats extends EventEmitter {
         this.emitEvent({
           event: 'ended',
           tag: 'track',
+          connectionId,
           data: {
             event: ev
           }
         })
 
-        // no need to listen for event on this track
+        // no need to listen for events on this track anymore
         this.removeTrackEventListeners(ev.target)
       }
     }
@@ -684,10 +695,11 @@ export class WebRTCStats extends EventEmitter {
    * Add event listeners for the tracks that are added to the stream
    * @param {MediaStreamTrack} track
    */
-  private addTrackEventListeners (track: MediaStreamTrack) {
+  private addTrackEventListeners (track: MediaStreamTrack, connectionId?: string) {
     eventListeners[track.id] = {}
-    Object.keys(this.getTrackEventObject).forEach(eventName => {
-      eventListeners[track.id][eventName] = this.getTrackEventObject[eventName].bind(this)
+    const events = this.getTrackEventObject(connectionId)
+    Object.keys(events).forEach(eventName => {
+      eventListeners[track.id][eventName] = events[eventName].bind(this)
       track.addEventListener(eventName, eventListeners[track.id][eventName])
     })
 
@@ -703,7 +715,8 @@ export class WebRTCStats extends EventEmitter {
 
   private removeTrackEventListeners (track: MediaStreamTrack) {
     if (track.id in eventListeners)  {
-      Object.keys(this.getTrackEventObject).forEach(eventName => {
+      const events = this.getTrackEventObject()
+      Object.keys(events).forEach(eventName => {
         track.removeEventListener(eventName, eventListeners[track.id][eventName])
       })
 
