@@ -1,6 +1,6 @@
 {
   "name": "@peermetrics/webrtc-stats",
-  "version": "5.6.0",
+  "version": "5.7.0",
   "description": "Library that helps collect and parse webrtc stats.",
   "main": "dist/index.js",
   "repository": "https://github.com/peermetrics/webrtc-stats",
