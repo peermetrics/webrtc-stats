@@ -7,9 +7,9 @@
     <button id="startButton">start</button>
     <button id="callButton">call</button>
     <button id="hangupButton">hangup</button>
-    <script src="https://unpkg.com/@peermetrics/webrtc-stats@latest/dist/browser.js"></script>
+    <!-- <script src="https://unpkg.com/@peermetrics/webrtc-stats@latest/dist/browser.js"></script> -->
 
-    <!-- <script type="text/javascript" src="../dist/browser.js"></script> -->
+    <script type="text/javascript" src="../dist/browser.js"></script>
 
     <script>
       window.stats = new WebRTCStats({
@@ -96,6 +96,11 @@
         pc2 = new RTCPeerConnection(configuration);
         pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
         pc2.addEventListener('track', gotRemoteStream);
+
+        // stats.addConnection({
+        //   pc: pc2,
+        //   peerId: '2'
+        // })
 
         localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
         remoteStream.getTracks().forEach(track => pc2.addTrack(track, remoteStream));

@@ -19,6 +19,12 @@ import {parseStats, map2obj} from './utils'
 // used to keep track of events listeners. useful when we want to remove them
 let eventListeners = {}
 
+// used to save the original getUsermedia native method
+let origGetUserMedia
+
+// tracks that have been obtained from calling getUsermedia
+let localTracks = []
+
 export class WebRTCStats extends EventEmitter {
   private readonly isEdge: boolean
   private _getStatsInterval: number
@@ -197,6 +203,140 @@ export class WebRTCStats extends EventEmitter {
     }
 
     return this.timeline
+  }
+
+  public get logger () {
+    const canLog = (requestLevel: LogLevel) => {
+      const allLevels: LogLevel[] = ['none', 'error', 'warn', 'info', 'debug']
+      return allLevels.slice(0, allLevels.indexOf(this.logLevel) + 1).indexOf(requestLevel) > -1
+    }
+
+    return {
+      error (...msg) {
+        if (this.debug && canLog('error'))
+          console.error(`[webrtc-stats][error] `, ...msg)
+      },
+      warn (...msg) {
+        if (this.debug && canLog('warn'))
+          console.warn(`[webrtc-stats][warn] `, ...msg)
+      },
+      info (...msg) {
+        if (this.debug && canLog('info'))
+          console.log(`[webrtc-stats][info] `, ...msg)
+      },
+      debug (...msg) {
+        if (this.debug && canLog('debug'))
+          console.debug(`[webrtc-stats][debug] `, ...msg)
+      }
+    }
+  }
+
+  /**
+   * Removes a connection from the list of connections to watch
+   * @param {RemoveConnectionOptions} options The options object for this method
+   */
+  public removeConnection (options: RemoveConnectionOptions): RemoveConnectionReturn {
+    let {connectionId, pc} = options
+
+    let peerId
+
+    if (!pc && !connectionId) {
+      throw new Error('Missing arguments. You need to either send pc or a connectionId.')
+    }
+
+    // if the user sent a connectionId
+    if (connectionId) {
+      if (typeof connectionId !== 'string') {
+        throw new Error('connectionId must be a string.')
+      }
+
+      for (let pId in this.peersToMonitor) {
+        if (connectionId in this.peersToMonitor[pId]) {
+          pc = this.peersToMonitor[pId][connectionId].pc
+          peerId = pId
+        }
+      }
+
+    // else, if the user sent a pc
+    } else if (pc) {
+      if (!(pc instanceof RTCPeerConnection)) {
+        throw new Error('pc must be an instance of RTCPeerConnection.')
+      }
+
+      // loop through all the peers
+      for (let pId in this.peersToMonitor) {
+        // loop through all the connections
+        for (let cId in this.peersToMonitor[pId]) {
+          // until we find the one we're searching for
+          if (this.peersToMonitor[pId][cId].pc === pc) {
+            connectionId = cId
+            peerId = pId
+          }
+        }
+      }
+    }
+
+    if (!pc || !connectionId) {
+      throw new Error('Could not find the desired connection.')
+    }
+
+    // remove listeners
+    this.removePeerConnectionEventListeners(connectionId, pc)
+    // delete it
+    delete this.peersToMonitor[peerId][connectionId]
+
+    // check if the user has no more connections
+    if (Object.values(this.peersToMonitor[peerId]).length === 0) {
+      delete this.peersToMonitor[peerId]
+    }
+
+    return {
+      connectionId
+    }
+  }
+
+  /**
+   * Used to stop listeners on all connections and remove all other event listeners
+   */
+  public removeAllPeers() {
+    for (let peerId in this.peersToMonitor) {
+      this.removePeer(peerId)
+    }
+  }
+
+  /**
+   * Removes all the connection for a peer
+   * @param {string} id The peer id
+   */
+  public removePeer (id: string) {
+    this.logger.info(`Removing PeerConnection with id ${id}.`)
+    if (!this.peersToMonitor[id]) return
+
+    for (let connectionId in this.peersToMonitor[id]) {
+      let pc = this.peersToMonitor[id][connectionId].pc
+
+      this.removePeerConnectionEventListeners(connectionId, pc)
+    }
+
+    // remove from peersToMonitor
+    delete this.peersToMonitor[id]
+  }
+
+  /**
+   * Used to remove all event listeners and reset the state of the lib
+   */
+  public destroy () {
+    // remove all peer connection event listeners
+    this.removeAllPeers()
+
+    localTracks.forEach((track) => {
+      this.removeTrackEventListeners(track)
+    })
+
+    localTracks = []
+
+    // put back the original gUM native method
+    navigator.mediaDevices.getUserMedia = origGetUserMedia
   }
 
   /**
@@ -411,7 +551,7 @@ export class WebRTCStats extends EventEmitter {
 
     this.logger.info('Wrapping getUsermedia functions.')
 
-    const origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+    origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
 
     const getUserMediaCallback = this.parseGetUserMedia.bind(this)
     const gum = function () {
@@ -596,6 +736,7 @@ export class WebRTCStats extends EventEmitter {
         // add event listeners for local tracks as well
         options.stream.getTracks().map((track) => {
           this.addTrackEventListeners(track)
+          localTracks.push(track)
         })
       }
 
@@ -767,114 +908,6 @@ export class WebRTCStats extends EventEmitter {
       this.stopStatsMonitoring()
       this.startStatsMonitoring()
     }
-  }
-
-  public get logger () {
-    const canLog = (requestLevel: LogLevel) => {
-      const allLevels: LogLevel[] = ['none', 'error', 'warn', 'info', 'debug']
-      return allLevels.slice(0, allLevels.indexOf(this.logLevel) + 1).indexOf(requestLevel) > -1
-    }
-
-    return {
-      error (...msg) {
-        if (this.debug && canLog('error'))
-          console.error(`[webrtc-stats][error] `, ...msg)
-      },
-      warn (...msg) {
-        if (this.debug && canLog('warn'))
-          console.warn(`[webrtc-stats][warn] `, ...msg)
-      },
-      info (...msg) {
-        if (this.debug && canLog('info'))
-          console.log(`[webrtc-stats][info] `, ...msg)
-      },
-      debug (...msg) {
-        if (this.debug && canLog('debug'))
-          console.debug(`[webrtc-stats][debug] `, ...msg)
-      }
-    }
-  }
-
-  /**
-   * Removes a connection from the list of connections to watch
-   * @param {RemoveConnectionOptions} options The options object for this method
-   */
-  public removeConnection (options: RemoveConnectionOptions): RemoveConnectionReturn {
-    let {connectionId, pc} = options
-
-    let peerId
-
-    if (!pc && !connectionId) {
-      throw new Error('Missing arguments. You need to either send pc or a connectionId.')
-    }
-
-    // if the user sent a connectionId
-    if (connectionId) {
-      if (typeof connectionId !== 'string') {
-        throw new Error('connectionId must be a string.')
-      }
-
-      for (let pId in this.peersToMonitor) {
-        if (connectionId in this.peersToMonitor[pId]) {
-          pc = this.peersToMonitor[pId][connectionId].pc
-          peerId = pId
-        }
-      }
-
-    // else, if the user sent a pc
-    } else if (pc) {
-      if (!(pc instanceof RTCPeerConnection)) {
-        throw new Error('pc must be an instance of RTCPeerConnection.')
-      }
-
-      // loop through all the peers
-      for (let pId in this.peersToMonitor) {
-        // loop through all the connections
-        for (let cId in this.peersToMonitor[pId]) {
-          // until we find the one we're searching for
-          if (this.peersToMonitor[pId][cId].pc === pc) {
-            connectionId = cId
-            peerId = pId
-          }
-        }
-      }
-    }
-
-    if (!pc || !connectionId) {
-      throw new Error('Could not find the desired connection.')
-    }
-
-    // remove listeners
-    this.removePeerConnectionEventListeners(connectionId, pc)
-    // delete it
-    delete this.peersToMonitor[peerId][connectionId]
-
-    // check if the user has no more connections
-    if (Object.values(this.peersToMonitor[peerId]).length === 0) {
-      delete this.peersToMonitor[peerId]
-    }
-
-    return {
-      connectionId
-    }
-  }
-
-  /**
-   * Removes all the connection for a peer
-   * @param {string} id The peer id
-   */
-  public removePeer (id: string) {
-    this.logger.info(`Removing PeerConnection with id ${id}.`)
-    if (!this.peersToMonitor[id]) return
-
-    for (let connectionId in this.peersToMonitor[id]) {
-      let pc = this.peersToMonitor[id][connectionId].pc
-
-      this.removePeerConnectionEventListeners(connectionId, pc)
-    }
-
-    // remove from peersToMonitor
-    delete this.peersToMonitor[id]
   }
 
   /**

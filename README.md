@@ -10,10 +10,6 @@ On top of that, it offers the `timeline` which is a list of all the events fired
 
 WebRTCStats extends `EventEmitter` and uses the same event system to communicate with the rest of the app.
 
-#### Migrating from v4
-To see the changes that appeared in V5 see the [changelog](https://github.com/peermetrics/webrtc-stats/releases/tag/v5.0.0)
-
-
 ## Install
 
 ```sh
@@ -132,18 +128,25 @@ Removes the `RTCPeerConnection` from the list of watched connections for that pe
 
 Stop listening for events/stats on all connections for this peer
 
+#### `.removeAllPeers()`
+
+Used to stop listening to all the peers and connections added.
+
 #### `.getTimeline([filter])`
 Return the array of events from the timeline up to that point.
 If the optional `filter` string is present it will filter out events. Possible values: `peer`, `connection`, `track`, `stats`, `getUserMedia`
 
-#### `.addPeer(peerId, pc)` - Deprecated
+#### `.destroy()`
 
-This method is deprecated, please use `.addConnection()` instead
+Stop listening to all event listeners and reset the state of the instance. Useful for cleanup. 
+
+A new instance of `WebRTCStats` should be used if you would like to start monitoring again.
 
 ### Events
 The module uses `EventEmitter` to emit events. You can listen to them using `.on()`
 ```js
 stats.on('eventName', (ev) => {
+    
 })
 ```
 `ev` will have the following structure:
@@ -183,5 +186,10 @@ The tags for the events fired by `WebRTCStats` are:
 - `connection`: any event related to connection
 - `datachannel`: any datachannel event
 
+## Developed by 
+
+[<img src="https://peermetrics.io/static/img/logo.png" style="zoom:25%;" />](https://peermetrics.io/)
+
 ## License
+
 MIT
