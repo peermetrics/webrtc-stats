@@ -335,8 +335,11 @@ export class WebRTCStats extends EventEmitter {
 
     localTracks = []
 
-    // put back the original gUM native method
-    navigator.mediaDevices.getUserMedia = origGetUserMedia
+    // if we wrapped gUM initially
+    if (this.shouldWrapGetUserMedia && origGetUserMedia) {
+      // put back the original
+      navigator.mediaDevices.getUserMedia = origGetUserMedia
+    }
   }
 
   /**
