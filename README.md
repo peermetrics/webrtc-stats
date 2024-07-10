@@ -142,6 +142,10 @@ Stop listening to all event listeners and reset the state of the instance. Usefu
 
 A new instance of `WebRTCStats` should be used if you would like to start monitoring again.
 
+#### `.clearTimeline()`
+
+Clears the internal timeline array.
+
 ### Events
 The module uses `EventEmitter` to emit events. You can listen to them using `.on()`
 ```js
