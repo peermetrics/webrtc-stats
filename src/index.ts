@@ -323,6 +323,13 @@ export class WebRTCStats extends EventEmitter {
   }
 
   /**
+   * Clears the timeline of events
+   */
+  public clearTimeline (): void {
+    this.timeline = []
+  }
+
+  /**
    * Used to remove all event listeners and reset the state of the lib
    */
   public destroy () {
@@ -340,6 +347,9 @@ export class WebRTCStats extends EventEmitter {
       // put back the original
       navigator.mediaDevices.getUserMedia = origGetUserMedia
     }
+
+    // clear the timeline
+    this.clearTimeline()
   }
 
   /**
