@@ -192,7 +192,7 @@ The tags for the events fired by `WebRTCStats` are:
 
 ## Developed by 
 
-[<img src="https://peermetrics.io/static/img/logo.png" style="zoom:25%;" />](https://peermetrics.io/)
+[<img src="https://peermetrics.io/static/img/logo.png" style="width:200px" />](https://peermetrics.io/)
 
 ## License
 
