@@ -172,6 +172,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
     }
   }
 
+  let peerConnectionReport: { dataChannelsClosed?: number, dataChannelsOpened?: number } | undefined
   for (const report of stats.values()) {
     switch (report.type) {
       case 'outbound-rtp': {
@@ -234,8 +235,7 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
         break
       }
       case 'peer-connection': {
-        statsObject.connection.dataChannelsClosed = report.dataChannelsClosed
-        statsObject.connection.dataChannelsOpened = report.dataChannelsOpened
+        peerConnectionReport = report
         break
       }
       case 'remote-inbound-rtp': {
@@ -306,6 +306,12 @@ export function parseStats (stats: any, previousStats: StatsObject | null, optio
         statsObject.connection = getCandidatePairInfo(report, stats)
       }
     }
+  }
+
+  // Candidate-pair selection can replace the connection object.
+  if (peerConnectionReport) {
+    statsObject.connection.dataChannelsClosed = peerConnectionReport.dataChannelsClosed
+    statsObject.connection.dataChannelsOpened = peerConnectionReport.dataChannelsOpened
   }
 
   statsObject = addAdditionalData(statsObject, previousStats)

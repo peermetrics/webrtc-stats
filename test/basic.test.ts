@@ -87,6 +87,55 @@ test('parseStats: inbound audio row + codec merge', () => {
   assert.equal(out!.audio.inbound[0].mimeType, 'audio/opus')
 })
 
+const peerConnectionReport = {
+  id: 'peer',
+  type: 'peer-connection',
+  dataChannelsOpened: 3,
+  dataChannelsClosed: 0
+}
+const selectedPairReports = {
+  pair: {
+    id: 'pair',
+    type: 'candidate-pair',
+    nominated: true,
+    state: 'succeeded',
+    localCandidateId: 'local',
+    remoteCandidateId: 'remote'
+  },
+  local: { id: 'local', type: 'local-candidate' },
+  remote: { id: 'remote', type: 'remote-candidate' },
+  transport: { id: 'transport', type: 'transport', selectedCandidatePairId: 'pair' }
+}
+
+test('parseStats: data-channel counters survive candidate-pair fallback', () => {
+  const stats = mockStatsMap({ ...selectedPairReports, peer: peerConnectionReport })
+  const { connection } = parseStats(stats, null)
+  assert.equal(connection.id, 'pair')
+  assert.deepEqual(connection.local, selectedPairReports.local)
+  assert.deepEqual(connection.remote, selectedPairReports.remote)
+  assert.equal(connection.dataChannelsOpened, 3)
+  assert.equal(connection.dataChannelsClosed, 0)
+})
+
+for (const rtpType of ['inbound-rtp', 'remote-inbound-rtp']) {
+  test(`parseStats: data-channel counters survive ${rtpType} candidate-pair selection in either report order`, () => {
+    const rtp = { id: 'rtp', type: rtpType, kind: 'audio', transportId: 'transport' }
+    const fallbackPair = { ...selectedPairReports.pair, id: 'fallbackPair' }
+    const reports = [
+      { peer: peerConnectionReport, rtp },
+      { rtp, peer: peerConnectionReport }
+    ]
+
+    for (const reportOrder of reports) {
+      const stats = mockStatsMap({ ...reportOrder, ...selectedPairReports, fallbackPair })
+      const { connection } = parseStats(stats, null, { remote: true })
+      assert.equal(connection.id, 'pair')
+      assert.equal(connection.dataChannelsOpened, 3)
+      assert.equal(connection.dataChannelsClosed, 0)
+    }
+  })
+}
+
 test('parseStats: bitrate on second sample (local + remote)', () => {
   const base = {
     id: 'r1',
